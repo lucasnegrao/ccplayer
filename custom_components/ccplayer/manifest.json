@@ -1,0 +1,14 @@
+{
+  "codeowners": ["@lucasnegrao"],
+  "config_flow": true,
+  "dependencies": ["mqtt"],
+  "documentation": "https://github.com/lucasnegrao/ccplayer_integration",
+  "domain": "ccplayer",
+  "iot_class": "calculated",
+  "name": "CC Player",
+  "requirements": [],
+  "version": "1.0.0",
+  "mqtt": [
+    "ccast/discovery/#"
+  ]
+}

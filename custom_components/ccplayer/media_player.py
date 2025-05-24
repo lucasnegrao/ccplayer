@@ -8,7 +8,6 @@ from copy import deepcopy
 
 from homeassistant.components import media_source
 from homeassistant.components.media_player import (
-    BrowseMedia,
     MediaPlayerDeviceClass,
     MediaPlayerEnqueue,
     MediaPlayerEntity,
@@ -30,7 +29,12 @@ from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.template import Template
 from homeassistant.helpers.service import async_call_from_config
 from homeassistant import util
-
+from .browse_media import (  # noqa: F401
+    BrowseMedia,
+    SearchMedia,
+    SearchMediaQuery,
+    async_process_play_media_url,
+)
 from .const import (
     CONF_ACTIONS,
     CONF_CLEAR_PLAYLIST_ACTION,

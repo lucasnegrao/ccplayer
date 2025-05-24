@@ -36,12 +36,30 @@ from .const import (
     CONF_VOLUME_ENTITY,
     CONF_VOLUME_STEP,
     DEFAULT_VOLUME_STEP,
+    # New constants
+    CONF_MEDIA_ALBUM_ARTIST_ENTITY,
+    CONF_MEDIA_TRACK_ENTITY,
+    CONF_MEDIA_SERIES_TITLE_ENTITY,
+    CONF_MEDIA_SEASON_ENTITY,
+    CONF_MEDIA_EPISODE_ENTITY,
+    CONF_MEDIA_CHANNEL_ENTITY,
+    CONF_MEDIA_PLAYLIST_ENTITY,
+    CONF_SOUND_MODE_ENTITY,
+    CONF_SOUND_MODE_LIST_ENTITY,
+    CONF_APP_ID_ENTITY,
+    CONF_APP_NAME_ENTITY,
+    CONF_GROUP_MEMBERS_ENTITY,
+    CONF_REPEAT_STATE_ENTITY,
+    CONF_SHUFFLE_STATE_ENTITY,
+    CONF_SELECT_SOUND_MODE_ACTION,
+    CONF_OPEN_ACTION,
+    CONF_CLOSE_ACTION,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
 # Define action keys at the module level for reuse
-_PLAYER_ACTION_KEYS = [
+_PLAYER_ACTION_KEYS_PLAYBACK = [
     CONF_PLAY_ACTION,
     CONF_PAUSE_ACTION,
     CONF_STOP_ACTION,
@@ -51,9 +69,15 @@ _PLAYER_ACTION_KEYS = [
     CONF_PLAY_PAUSE_ACTION,
     CONF_SEEK_ACTION,
     CONF_PLAY_MEDIA_ACTION,
+]
+
+_PLAYER_ACTION_KEYS_OTHER = [
     CONF_CLEAR_PLAYLIST_ACTION,
     CONF_SHUFFLE_SET_ACTION,
     CONF_REPEAT_SET_ACTION,
+    CONF_SELECT_SOUND_MODE_ACTION,
+    CONF_OPEN_ACTION,
+    CONF_CLOSE_ACTION,
 ]
 
 # Define lists of entity keys for options flow steps
@@ -73,6 +97,23 @@ _ENTITY_KEYS_MEDIA_INFO = [
     CONF_MEDIA_IMAGE_ENTITY,
     CONF_MEDIA_POSITION_ENTITY,
     CONF_MEDIA_DURATION_ENTITY,
+    CONF_MEDIA_ALBUM_ARTIST_ENTITY,
+    CONF_MEDIA_TRACK_ENTITY,
+    CONF_MEDIA_SERIES_TITLE_ENTITY,
+    CONF_MEDIA_SEASON_ENTITY,
+    CONF_MEDIA_EPISODE_ENTITY,
+    CONF_MEDIA_CHANNEL_ENTITY,
+    CONF_MEDIA_PLAYLIST_ENTITY,
+]
+
+_ENTITY_KEYS_ADVANCED_STATE = [
+    CONF_SOUND_MODE_ENTITY,
+    CONF_SOUND_MODE_LIST_ENTITY,
+    CONF_APP_ID_ENTITY,
+    CONF_APP_NAME_ENTITY,
+    CONF_GROUP_MEMBERS_ENTITY,
+    CONF_REPEAT_STATE_ENTITY,
+    CONF_SHUFFLE_STATE_ENTITY,
 ]
 
 
@@ -128,16 +169,59 @@ class CCPlayerOptionsFlow(OptionsFlow):
         self._add_entity_selector_to_schema(schema_fields, CONF_MEDIA_IMAGE_ENTITY, "image")
         self._add_entity_selector_to_schema(schema_fields, CONF_MEDIA_POSITION_ENTITY, ["sensor", "input_number"])
         self._add_entity_selector_to_schema(schema_fields, CONF_MEDIA_DURATION_ENTITY, ["sensor", "input_number"])
+        self._add_entity_selector_to_schema(schema_fields, CONF_MEDIA_ALBUM_ARTIST_ENTITY, ["sensor", "input_text"])
+        self._add_entity_selector_to_schema(schema_fields, CONF_MEDIA_TRACK_ENTITY, ["sensor", "input_text", "input_number"])
+        self._add_entity_selector_to_schema(schema_fields, CONF_MEDIA_SERIES_TITLE_ENTITY, ["sensor", "input_text"])
+        self._add_entity_selector_to_schema(schema_fields, CONF_MEDIA_SEASON_ENTITY, ["sensor", "input_text", "input_number"])
+        self._add_entity_selector_to_schema(schema_fields, CONF_MEDIA_EPISODE_ENTITY, ["sensor", "input_text", "input_number"])
+        self._add_entity_selector_to_schema(schema_fields, CONF_MEDIA_CHANNEL_ENTITY, ["sensor", "input_text"])
+        self._add_entity_selector_to_schema(schema_fields, CONF_MEDIA_PLAYLIST_ENTITY, ["sensor", "input_text"])
         return vol.Schema(schema_fields)
 
-    def _get_actions_options_schema(self) -> vol.Schema:
-        """Return schema for actions options."""
+    def _get_advanced_state_options_schema(self) -> vol.Schema:
+        """Return schema for advanced state entities."""
+        schema_fields = {}
+        self._add_entity_selector_to_schema(schema_fields, CONF_SOUND_MODE_ENTITY, ["input_select", "select", "sensor"])
+        self._add_entity_selector_to_schema(schema_fields, CONF_SOUND_MODE_LIST_ENTITY, ["sensor", "input_text"])
+        self._add_entity_selector_to_schema(schema_fields, CONF_APP_ID_ENTITY, ["sensor", "input_text"])
+        self._add_entity_selector_to_schema(schema_fields, CONF_APP_NAME_ENTITY, ["sensor", "input_text"])
+        self._add_entity_selector_to_schema(schema_fields, CONF_GROUP_MEMBERS_ENTITY, ["sensor"]) # Typically a list
+        self._add_entity_selector_to_schema(schema_fields, CONF_REPEAT_STATE_ENTITY, ["sensor", "input_select"])
+        self._add_entity_selector_to_schema(schema_fields, CONF_SHUFFLE_STATE_ENTITY, ["sensor", "input_boolean", "switch"])
+        return vol.Schema(schema_fields)
+
+    def _get_playback_actions_options_schema(self) -> vol.Schema:
+        """Return schema for playback actions options."""
         schema_fields = {}
         all_player_actions = self.options.get(CONF_ACTIONS)
         if not isinstance(all_player_actions, dict):
             all_player_actions = {}
 
-        for action_key in _PLAYER_ACTION_KEYS:
+        for action_key in _PLAYER_ACTION_KEYS_PLAYBACK:
+            default_value_for_selector = all_player_actions.get(action_key)
+            if default_value_for_selector is not None and isinstance(default_value_for_selector, list):
+                schema_fields[
+                    vol.Optional(action_key, default=default_value_for_selector)
+                ] = selector.ActionSelector()
+            else:
+                if default_value_for_selector is not None:
+                    _LOGGER.warning(
+                        "Invalid stored action for %s (expected list, got %s): %s. Will show as unset.",
+                        action_key,
+                        type(default_value_for_selector).__name__,
+                        default_value_for_selector,
+                    )
+                schema_fields[vol.Optional(action_key)] = selector.ActionSelector()
+        return vol.Schema(schema_fields)
+
+    def _get_other_actions_options_schema(self) -> vol.Schema:
+        """Return schema for other actions options."""
+        schema_fields = {}
+        all_player_actions = self.options.get(CONF_ACTIONS)
+        if not isinstance(all_player_actions, dict):
+            all_player_actions = {}
+
+        for action_key in _PLAYER_ACTION_KEYS_OTHER:
             default_value_for_selector = all_player_actions.get(action_key)
             if default_value_for_selector is not None and isinstance(default_value_for_selector, list):
                 schema_fields[
@@ -204,15 +288,40 @@ class CCPlayerOptionsFlow(OptionsFlow):
         )
 
     async def async_step_actions(self, user_input=None):
-        """Configure media player actions."""
+        """DEPRECATED: Redirect to playback_actions. Retained for potential in-progress flows."""
+        _LOGGER.warning("async_step_actions is deprecated, redirecting to async_step_playback_actions")
+        return await self.async_step_playback_actions(user_input)
+
+
+    async def async_step_advanced_state(self, user_input=None):
+        """Configure advanced state entities."""
         if user_input is not None:
-            _LOGGER.debug("Raw user input received for actions: %s", user_input)
+            for key in _ENTITY_KEYS_ADVANCED_STATE:
+                if key in user_input:
+                    value = user_input[key]
+                    if isinstance(value, str) and value.strip():
+                        self.options[key] = value.strip()
+                    else:
+                        self.options.pop(key, None)
+            # Proceed to the next step: playback_actions
+            return await self.async_step_playback_actions()
+
+        return self.async_show_form(
+            step_id="advanced_state",
+            data_schema=self._get_advanced_state_options_schema(),
+            last_step=False
+        )
+
+    async def async_step_playback_actions(self, user_input=None):
+        """Configure media player playback actions."""
+        if user_input is not None:
+            _LOGGER.debug("Raw user input received for playback actions: %s", user_input)
             current_actions_dict = self.options.get(CONF_ACTIONS, {}).copy()
             if not isinstance(current_actions_dict, dict):
                 _LOGGER.warning("%s in options was not a dict, resetting. Value: %s", CONF_ACTIONS, current_actions_dict)
                 current_actions_dict = {}
 
-            for action_key in _PLAYER_ACTION_KEYS:
+            for action_key in _PLAYER_ACTION_KEYS_PLAYBACK:
                 if action_key in user_input:
                     action_data_list = user_input[action_key]
                     if isinstance(action_data_list, list):
@@ -222,12 +331,42 @@ class CCPlayerOptionsFlow(OptionsFlow):
                         current_actions_dict[action_key] = []
             
             self.options[CONF_ACTIONS] = current_actions_dict
-            _LOGGER.debug("Final actions configuration: %s", self.options.get(CONF_ACTIONS))
+            _LOGGER.debug("Updated actions after playback_actions: %s", self.options.get(CONF_ACTIONS))
+            # Proceed to the next step: other_actions
+            return await self.async_step_other_actions()
+
+        return self.async_show_form(
+            step_id="playback_actions",
+            data_schema=self._get_playback_actions_options_schema(),
+            last_step=False 
+        )
+
+    async def async_step_other_actions(self, user_input=None):
+        """Configure other media player actions."""
+        if user_input is not None:
+            _LOGGER.debug("Raw user input received for other actions: %s", user_input)
+            current_actions_dict = self.options.get(CONF_ACTIONS, {}).copy()
+            # Ensure it's a dict, though it should be from previous step
+            if not isinstance(current_actions_dict, dict):
+                _LOGGER.error("%s in options was not a dict at other_actions step, resetting. Value: %s", CONF_ACTIONS, current_actions_dict)
+                current_actions_dict = {}
+
+            for action_key in _PLAYER_ACTION_KEYS_OTHER:
+                if action_key in user_input:
+                    action_data_list = user_input[action_key]
+                    if isinstance(action_data_list, list):
+                        current_actions_dict[action_key] = action_data_list
+                    else:
+                        _LOGGER.warning("Action data for %s is not a list: %s. Clearing to empty list.", action_key, action_data_list)
+                        current_actions_dict[action_key] = []
+            
+            self.options[CONF_ACTIONS] = current_actions_dict
+            _LOGGER.debug("Final actions configuration after other_actions: %s", self.options.get(CONF_ACTIONS))
             # This is the last step, save the options and finish.
             return self.async_create_entry(title="", data=self.options)
 
         return self.async_show_form(
-            step_id="actions",
-            data_schema=self._get_actions_options_schema(),
+            step_id="other_actions",
+            data_schema=self._get_other_actions_options_schema(),
             last_step=True  # This shows Back and Submit buttons
         )

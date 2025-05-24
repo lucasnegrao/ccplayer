@@ -35,3 +35,9 @@ CONF_REPEAT_SET_ACTION = "repeat_set_action"
 # Default values
 DEFAULT_NAME = "CC Player"
 DEFAULT_VOLUME_STEP = 0.05
+
+# Device information constants
+DEVICE_MANUFACTURER = "Custom Component"
+DEVICE_MODEL = "TV"
+DEVICE_SW_VERSION = "1.0.0"
+DEVICE_NAME_DEFAULT = "CC Player"

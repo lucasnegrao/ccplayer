@@ -1,0 +1,7 @@
+{
+  "name": "CC Player",
+  "hacs": "1.0.0",
+  "domains": ["mediaplayer"],
+  "iot_class": "calculated",
+  "homeassistant": "0.118.0"
+}

@@ -6,9 +6,18 @@
   "domain": "ccplayer",
   "iot_class": "calculated",
   "name": "CC Player",
-  "requirements": [],
+  "requirements": ["mqtt"],
   "version": "1.0.0",
   "mqtt": [
     "ccast/discovery/#"
-  ]
+  ],
+  "integration_type": "device",
+  "issue_tracker": "https://github.com/lucasnegrao/ccplayer/issues",
+  "quality_scale": "bronze",
+  "loggers": ["custom_components.ccplayer"],
+  "icon": "mdi:cast-variant",
+  "brand": {
+    "logo": "images/logo.png",
+    "banner": "images/banner.png"
+  }
 }

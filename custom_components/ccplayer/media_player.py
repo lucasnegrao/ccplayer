@@ -1,96 +1,35 @@
 """Media player platform for CC Player."""
 
+import json
 import logging
-from typing import Any, Dict, List, Optional
+
+from typing import Any
+from copy import deepcopy
+
 from homeassistant.components import media_source
-from homeassistant.components.media_player.browse_media import (
-    async_process_play_media_url,
-)
-from homeassistant import util
-from homeassistant.helpers import template
 from homeassistant.components.media_player import (
-    ATTR_APP_ID,
-    ATTR_APP_NAME,
-    ATTR_INPUT_SOURCE,
-    ATTR_INPUT_SOURCE_LIST,
-    ATTR_MEDIA_ALBUM_ARTIST,
-    ATTR_MEDIA_ALBUM_NAME,
-    ATTR_MEDIA_ARTIST,
-    ATTR_MEDIA_CHANNEL,
-    ATTR_MEDIA_CONTENT_ID,
-    ATTR_MEDIA_CONTENT_TYPE,
-    ATTR_MEDIA_DURATION,
-    ATTR_MEDIA_EPISODE,
-    ATTR_MEDIA_PLAYLIST,
-    ATTR_MEDIA_POSITION,
-    ATTR_MEDIA_POSITION_UPDATED_AT,
-    ATTR_MEDIA_REPEAT,
-    ATTR_MEDIA_SEASON,
-    ATTR_MEDIA_SEEK_POSITION,
-    ATTR_MEDIA_SERIES_TITLE,
-    ATTR_MEDIA_SHUFFLE,
-    ATTR_MEDIA_TITLE,
-    ATTR_MEDIA_TRACK,
-    ATTR_MEDIA_VOLUME_LEVEL,
-    ATTR_MEDIA_VOLUME_MUTED,
-    ATTR_SOUND_MODE,
-    ATTR_SOUND_MODE_LIST,
-    DEVICE_CLASSES_SCHEMA,
-    DOMAIN as MEDIA_PLAYER_DOMAIN,
-    PLATFORM_SCHEMA as MEDIA_PLAYER_PLATFORM_SCHEMA,
-    SERVICE_CLEAR_PLAYLIST,
-    SERVICE_PLAY_MEDIA,
-    SERVICE_SELECT_SOUND_MODE,
-    SERVICE_SELECT_SOURCE,
     BrowseMedia,
     MediaPlayerDeviceClass,
     MediaPlayerEnqueue,
     MediaPlayerEntity,
     MediaPlayerEntityFeature,
     MediaPlayerState,
-    MediaType,
-    RepeatMode,
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
-    ATTR_ASSUMED_STATE,
     ATTR_ENTITY_ID,
-    ATTR_ENTITY_PICTURE,
-    ATTR_SUPPORTED_FEATURES,
-    CONF_DEVICE_CLASS,
     CONF_NAME,
-    CONF_STATE,
-    CONF_STATE_TEMPLATE,
-    CONF_UNIQUE_ID,
-    EVENT_HOMEASSISTANT_START,
-    SERVICE_MEDIA_NEXT_TRACK,
-    SERVICE_MEDIA_PAUSE,
-    SERVICE_MEDIA_PLAY,
-    SERVICE_MEDIA_PLAY_PAUSE,
-    SERVICE_MEDIA_PREVIOUS_TRACK,
-    SERVICE_MEDIA_SEEK,
-    SERVICE_MEDIA_STOP,
-    SERVICE_REPEAT_SET,
-    SERVICE_SHUFFLE_SET,
-    SERVICE_TOGGLE,
     SERVICE_TURN_OFF,
     SERVICE_TURN_ON,
-    SERVICE_VOLUME_DOWN,
-    SERVICE_VOLUME_MUTE,
-    SERVICE_VOLUME_SET,
-    SERVICE_VOLUME_UP,
     STATE_OFF,
     STATE_ON,
-    STATE_UNAVAILABLE,
-    STATE_UNKNOWN,
 )
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.entity_component import EntityComponent
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.template import Template
 from homeassistant.helpers.service import async_call_from_config
-from copy import deepcopy
+from homeassistant import util
 
 from .const import (
     CONF_ACTIONS,
@@ -120,10 +59,30 @@ from .const import (
     CONF_VOLUME_ENTITY,
     CONF_VOLUME_STEP,
     DEFAULT_NAME,
+    DEVICE_MANUFACTURER,
+    DEVICE_MODEL,
+    DEVICE_NAME_DEFAULT,
+    DEVICE_SW_VERSION,
     DOMAIN,
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+# State mapping for player state entity
+PLAYER_STATE_MAP = {
+    "playing": MediaPlayerState.PLAYING,
+    "play": MediaPlayerState.PLAYING,
+    "paused": MediaPlayerState.PAUSED,
+    "pause": MediaPlayerState.PAUSED,
+    "stopped": MediaPlayerState.IDLE,
+    "stop": MediaPlayerState.IDLE,
+    "idle": MediaPlayerState.IDLE,
+    "buffering": MediaPlayerState.BUFFERING,
+    "on": MediaPlayerState.ON,
+    "true": MediaPlayerState.ON,
+    "off": MediaPlayerState.OFF,
+    "false": MediaPlayerState.OFF,
+}
 
 
 async def async_setup_entry(
@@ -164,10 +123,7 @@ class CCPlayerMediaPlayer(MediaPlayerEntity):
         self._attr_media_duration = None
         self._attr_media_position_updated_at = None
 
-        # Additional state tracking
-        self._last_position_update = None
-
-        # Entity references
+        # Entity references and actions
         self._entity_refs = {}
         self._actions = {}
         self._unsubscribe_callbacks = []
@@ -269,170 +225,185 @@ class CCPlayerMediaPlayer(MediaPlayerEntity):
             )
             self._unsubscribe_callbacks.append(unsub)
 
+    def _get_entity_state_value(self, entity_id: str, default=None):
+        """Get entity state value, handling common invalid states."""
+        if not entity_id:
+            return default
+        
+        state = self.hass.states.get(entity_id)
+        if not state or state.state in (None, "unknown", "unavailable", ""):
+            return default
+        return state.state
+
+    def _get_numeric_state_value(self, entity_id: str, default=None):
+        """Get numeric entity state value with error handling."""
+        value = self._get_entity_state_value(entity_id)
+        if value is None:
+            return default
+        
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            _LOGGER.warning("Could not convert %s state to float: %s", entity_id, value)
+            return default
+
+    def _parse_list_from_state(self, entity_id: str, default=None):
+        """Parse a list from entity state (JSON or comma-separated)."""
+        value = self._get_entity_state_value(entity_id)
+        if not value:
+            return default
+            
+        try:
+            return json.loads(value)
+        except (ValueError, TypeError):
+            # Try comma-separated fallback
+            return [s.strip() for s in value.split(",") if s.strip()]
+
+    def _get_volume_range(self) -> tuple[float, float]:
+        """Get volume entity's min and max values from its attributes."""
+        volume_entity = self._entity_refs.get(CONF_VOLUME_ENTITY)
+        if not volume_entity:
+            return 0.0, 1.0  # Default range
+            
+        state = self.hass.states.get(volume_entity)
+        if not state:
+            return 0.0, 1.0
+            
+        # Try to get min/max from entity attributes
+        min_value = state.attributes.get("min", 0.0)
+        max_value = state.attributes.get("max", 1.0)
+        
+        try:
+            return float(min_value), float(max_value)
+        except (ValueError, TypeError):
+            _LOGGER.warning("Could not parse volume range for %s, using defaults", volume_entity)
+            return 0.0, 1.0
+
+    def _normalize_volume_to_entity_range(self, volume_level: float) -> float:
+        """Convert Home Assistant volume level (0-1) to entity's range."""
+        min_val, max_val = self._get_volume_range()
+        return min_val + (volume_level * (max_val - min_val))
+
+    def _normalize_volume_from_entity_range(self, entity_value: float) -> float:
+        """Convert entity's volume value to Home Assistant range (0-1)."""
+        min_val, max_val = self._get_volume_range()
+        if max_val == min_val:
+            return 0.0
+        return (entity_value - min_val) / (max_val - min_val)
+
     async def _refresh_states(self) -> None:
         """Refresh all entity states."""
-        import time
-
-        # Determine player state from dedicated player state entity or power entity
-        current_state = None
-
-        # First try player state entity if configured
-        if player_state_entity := self._entity_refs.get(CONF_PLAYER_STATE_ENTITY):
-            state = self.hass.states.get(player_state_entity)
-            if state and state.state not in (None, "unknown", "unavailable"):
-                # Map common state values to MediaPlayerState
-                state_value = state.state.lower()
-                match state_value:
-                    case "playing" | "play":
-                        current_state = MediaPlayerState.PLAYING
-                    case "paused" | "pause":
-                        current_state = MediaPlayerState.PAUSED
-                    case "stopped" | "stop":
-                        current_state = MediaPlayerState.IDLE
-                    case "idle":
-                        current_state = MediaPlayerState.IDLE
-                    case "buffering":
-                        current_state = MediaPlayerState.BUFFERING
-                    case "on" | "true":
-                        current_state = MediaPlayerState.ON
-                    case "off" | "false":
-                        current_state = MediaPlayerState.OFF
-                    case _:
-                        # For unknown states, try to infer from media info
-                        if self._has_active_media():
-                            current_state = MediaPlayerState.PLAYING
-                        else:
-                            current_state = MediaPlayerState.IDLE
-
-        # Fallback to power entity if no player state entity
-        elif power_entity := self._entity_refs.get(CONF_POWER_ENTITY):
-            state = self.hass.states.get(power_entity)
-            if state:
-                if state.state == STATE_ON:
-                    # Try to determine if playing based on media info
-                    if self._has_active_media():
-                        current_state = MediaPlayerState.PLAYING
-                    else:
-                        current_state = MediaPlayerState.ON
-                elif state.state == STATE_OFF:
-                    current_state = MediaPlayerState.OFF
-
-        # Volume
-        if volume_entity := self._entity_refs.get(CONF_VOLUME_ENTITY):
-            state = self.hass.states.get(volume_entity)
-            if state and state.state not in (None, "unknown", "unavailable"):
-                try:
-                    # Assuming the volume entity has a value between 0 and 100
-                    self._attr_volume_level = float(state.state) / 100
-                except (ValueError, TypeError):
-                    self._attr_volume_level = None
+        current_state = self._determine_player_state()
+        
+        # Volume - use dynamic range from entity
+        volume_value = self._get_numeric_state_value(self._entity_refs.get(CONF_VOLUME_ENTITY))
+        if volume_value is not None:
+            self._attr_volume_level = self._normalize_volume_from_entity_range(volume_value)
+        else:
+            self._attr_volume_level = None
 
         # Mute
-        if mute_entity := self._entity_refs.get(CONF_MUTE_ENTITY):
-            state = self.hass.states.get(mute_entity)
-            if state:
-                self._attr_is_volume_muted = state.state == STATE_ON
+        mute_state = self._get_entity_state_value(self._entity_refs.get(CONF_MUTE_ENTITY))
+        self._attr_is_volume_muted = mute_state == STATE_ON if mute_state else None
 
         # Source
-        if source_entity := self._entity_refs.get(CONF_SOURCE_ENTITY):
+        self._attr_source = self._get_entity_state_value(self._entity_refs.get(CONF_SOURCE_ENTITY))
+        
+        # Source list from source entity attributes or separate entity
+        source_entity = self._entity_refs.get(CONF_SOURCE_ENTITY)
+        if source_entity:
             state = self.hass.states.get(source_entity)
-            if state and state.state not in (None, "unknown", "unavailable"):
-                self._attr_source = state.state
-
-                # Try to get source list from entity attributes
-                if "options" in state.attributes:
-                    self._attr_source_list = state.attributes["options"]
-
-        # Source list from separate entity
-        if source_list_entity := self._entity_refs.get(CONF_SOURCE_LIST_ENTITY):
-            state = self.hass.states.get(source_list_entity)
-            if state and state.state not in (None, "unknown", "unavailable"):
-                try:
-                    # Try to parse as a list if it's a string
-                    import json
-
-                    self._attr_source_list = json.loads(state.state)
-                except (ValueError, TypeError):
-                    # If not parseable as JSON, split by commas
-                    self._attr_source_list = [s.strip() for s in state.state.split(",")]
+            if state and "options" in state.attributes:
+                self._attr_source_list = state.attributes["options"]
+        
+        if not self._attr_source_list:
+            self._attr_source_list = self._parse_list_from_state(
+                self._entity_refs.get(CONF_SOURCE_LIST_ENTITY)
+            )
 
         # Media info
-        for attr, entity_key in [
+        self._refresh_media_info()
+        
+        # Update final state
+        self._attr_state = current_state
+        self.async_write_ha_state()
+
+    def _determine_player_state(self) -> MediaPlayerState | None:
+        """Determine player state from configured entities."""
+        # Try player state entity first
+        player_state_entity = self._entity_refs.get(CONF_PLAYER_STATE_ENTITY)
+        if player_state_entity:
+            state_value = self._get_entity_state_value(player_state_entity)
+            if state_value:
+                mapped_state = PLAYER_STATE_MAP.get(state_value.lower())
+                if mapped_state:
+                    return mapped_state
+                
+                # For unknown states, try to infer from media info
+                if self._has_active_media():
+                    return MediaPlayerState.PLAYING
+                return MediaPlayerState.IDLE
+
+        # Fallback to power entity
+        power_entity = self._entity_refs.get(CONF_POWER_ENTITY)
+        if power_entity:
+            power_state = self._get_entity_state_value(power_entity)
+            if power_state == STATE_ON:
+                return MediaPlayerState.PLAYING if self._has_active_media() else MediaPlayerState.ON
+            elif power_state == STATE_OFF:
+                return MediaPlayerState.OFF
+
+        return None
+
+    def _refresh_media_info(self) -> None:
+        """Refresh media information from configured entities."""
+        # Text media info
+        media_fields = [
             ("_attr_media_title", CONF_MEDIA_TITLE_ENTITY),
             ("_attr_media_artist", CONF_MEDIA_ARTIST_ENTITY),
             ("_attr_media_album_name", CONF_MEDIA_ALBUM_ENTITY),
-        ]:
-            if entity_id := self._entity_refs.get(entity_key):
-                state = self.hass.states.get(entity_id)
-                if state and state.state not in (None, "unknown", "unavailable", ""):
-                    setattr(self, attr, state.state)
-                else:
-                    setattr(self, attr, None)
+        ]
+        
+        for attr_name, entity_key in media_fields:
+            entity_id = self._entity_refs.get(entity_key)
+            value = self._get_entity_state_value(entity_id)
+            setattr(self, attr_name, value)
 
-        # Media duration
-        if duration_entity := self._entity_refs.get(CONF_MEDIA_DURATION_ENTITY):
-            state = self.hass.states.get(duration_entity)
-            if state and state.state not in (None, "unknown", "unavailable"):
-                try:
-                    self._attr_media_duration = float(state.state) / 1000
-                except (ValueError, TypeError):
-                    self._attr_media_duration = None
-            else:
-                self._attr_media_duration = None
+        # Media duration (convert from milliseconds)
+        duration_ms = self._get_numeric_state_value(self._entity_refs.get(CONF_MEDIA_DURATION_ENTITY))
+        self._attr_media_duration = duration_ms / 1000 if duration_ms is not None else None
 
-        # Media image (special handling for image entity)
-        if image_entity := self._entity_refs.get(CONF_MEDIA_IMAGE_ENTITY):
-            state = self.hass.states.get(image_entity)
-            if state:
-                # For image entities, use the entity_picture attribute if available
-                if "entity_picture" in state.attributes:
-                    self._attr_media_image_url = state.attributes["entity_picture"]
-                elif state.state not in (None, "unknown", "unavailable", ""):
-                    # Fallback to state value if it looks like a URL
-                    if state.state.startswith(("http://", "https://", "/local/")):
-                        self._attr_media_image_url = state.state
-                    else:
-                        self._attr_media_image_url = None
-                else:
-                    self._attr_media_image_url = None
+        # Media position with timestamp tracking
+        position_ms = self._get_numeric_state_value(self._entity_refs.get(CONF_MEDIA_POSITION_ENTITY))
+        if position_ms is not None:
+            self._attr_media_position = position_ms / 1000
+            self._attr_media_position_updated_at = util.dt.utcnow()
+        else:
+            self._attr_media_position = None
+            self._attr_media_position_updated_at = None
 
-        # Media position - improved tracking
-        if position_entity := self._entity_refs.get(CONF_MEDIA_POSITION_ENTITY):
-            state = self.hass.states.get(position_entity)
-            if state and state.state not in (None, "unknown", "unavailable"):
-                try:
-                    new_position = float(state.state) / 1000
-                    current_time = time.time()
+        # Media image
+        self._refresh_media_image()
 
-                    # Always update position and timestamp
-                    self._attr_media_position = new_position
-                    self._attr_media_position_updated_at = util.dt.utcnow()
-                    self._last_position_update = current_time
-
-                    # If position changed recently, we're likely playing
-                    if (
-                        current_state in [MediaPlayerState.ON, None]
-                        and new_position > 0
-                        and self._attr_media_duration
-                        and new_position < self._attr_media_duration
-                    ):
-                        current_state = MediaPlayerState.PLAYING
-
-                    _LOGGER.debug(
-                        "Updated media position: %s at time %s",
-                        new_position,
-                        current_time,
-                    )
-                except (ValueError, TypeError):
-                    self._attr_media_position = None
-                    self._attr_media_position_updated_at = None
-            else:
-                self._attr_media_position = None
-                self._attr_media_position_updated_at = None
-
-        # Update the final state after all processing
-        self._attr_state = current_state
-        self.async_write_ha_state()
+    def _refresh_media_image(self) -> None:
+        """Refresh media image from image entity."""
+        image_entity = self._entity_refs.get(CONF_MEDIA_IMAGE_ENTITY)
+        if not image_entity:
+            self._attr_media_image_url = None
+            return
+            
+        state = self.hass.states.get(image_entity)
+        if not state:
+            self._attr_media_image_url = None
+            return
+            
+        # Try entity_picture attribute first
+        if "entity_picture" in state.attributes:
+            self._attr_media_image_url = state.attributes["entity_picture"]
+        elif state.state and state.state.startswith(("http://", "https://", "/local/")):
+            self._attr_media_image_url = state.state
+        else:
+            self._attr_media_image_url = None
 
     @property
     def device_class(self) -> MediaPlayerDeviceClass | None:
@@ -572,17 +543,17 @@ class CCPlayerMediaPlayer(MediaPlayerEntity):
             # linked_identifier is a tuple (domain, id)
             return {
                 "identifiers": {tuple(linked_identifier)},
-                "name": self.name,
-                "manufacturer": "Custom Component",
-                "model": "CC Player",
-                "sw_version": "1.0.0",
+                "name": self._attr_name or DEVICE_NAME_DEFAULT,
+                "manufacturer": DEVICE_MANUFACTURER,
+                "model": DEVICE_MODEL,
+                "sw_version": DEVICE_SW_VERSION,
             }
         return {
             "identifiers": {(DOMAIN, self._config_entry.entry_id)},
-            "name": self.name,
-            "manufacturer": "Custom Component",
-            "model": "CC Player",
-            "sw_version": "1.0.0",
+            "name": self._attr_name or DEVICE_NAME_DEFAULT,
+            "manufacturer": DEVICE_MANUFACTURER,
+            "model": DEVICE_MODEL,
+            "sw_version": DEVICE_SW_VERSION,
         }
 
     async def async_turn_on(self) -> None:
@@ -599,57 +570,48 @@ class CCPlayerMediaPlayer(MediaPlayerEntity):
                 "homeassistant", SERVICE_TURN_OFF, {ATTR_ENTITY_ID: power_entity}
             )
 
+    async def _set_volume_entity_value(self, value: float) -> None:
+        """Set volume entity value with proper service call."""
+        volume_entity = self._entity_refs.get(CONF_VOLUME_ENTITY)
+        if not volume_entity:
+            return
+            
+        domain = volume_entity.split(".", 1)[0]
+        service = "set_value"
+        
+        # Ensure value is within entity's range
+        min_val, max_val = self._get_volume_range()
+        clamped_value = max(min_val, min(max_val, value))
+        
+        try:
+            await self.hass.services.async_call(
+                domain, service, {ATTR_ENTITY_ID: volume_entity, "value": clamped_value}
+            )
+        except Exception as ex:
+            _LOGGER.error("Failed to set volume for %s: %s", volume_entity, ex)
+
     async def async_volume_up(self) -> None:
         """Turn volume up."""
-        if volume_entity := self._entity_refs.get(CONF_VOLUME_ENTITY):
-            current = self.hass.states.get(volume_entity)
-            if current and current.state not in (None, "unknown", "unavailable"):
-                try:
-                    current_value = float(current.state)
-                    step = self._config_entry.options.get(CONF_VOLUME_STEP, 0.05) * 100
-                    new_value = min(100, current_value + step)
-
-                    domain = volume_entity.split(".", 1)[0]
-                    service = "set_value" if domain == "input_number" else "set_value"
-
-                    await self.hass.services.async_call(
-                        domain,
-                        service,
-                        {ATTR_ENTITY_ID: volume_entity, "value": new_value},
-                    )
-                except (ValueError, TypeError):
-                    _LOGGER.warning("Could not increase volume for %s", volume_entity)
+        current_value = self._get_numeric_state_value(self._entity_refs.get(CONF_VOLUME_ENTITY))
+        if current_value is not None:
+            min_val, max_val = self._get_volume_range()
+            step = self._config_entry.options.get(CONF_VOLUME_STEP, 0.05) * (max_val - min_val)
+            new_value = min(max_val, current_value + step)
+            await self._set_volume_entity_value(new_value)
 
     async def async_volume_down(self) -> None:
         """Turn volume down."""
-        if volume_entity := self._entity_refs.get(CONF_VOLUME_ENTITY):
-            current = self.hass.states.get(volume_entity)
-            if current and current.state not in (None, "unknown", "unavailable"):
-                try:
-                    current_value = float(current.state)
-                    step = self._config_entry.options.get(CONF_VOLUME_STEP, 0.05) * 100
-                    new_value = max(0, current_value - step)
-
-                    domain = volume_entity.split(".", 1)[0]
-                    service = "set_value" if domain == "input_number" else "set_value"
-
-                    await self.hass.services.async_call(
-                        domain,
-                        service,
-                        {ATTR_ENTITY_ID: volume_entity, "value": new_value},
-                    )
-                except (ValueError, TypeError):
-                    _LOGGER.warning("Could not decrease volume for %s", volume_entity)
+        current_value = self._get_numeric_state_value(self._entity_refs.get(CONF_VOLUME_ENTITY))
+        if current_value is not None:
+            min_val, max_val = self._get_volume_range()
+            step = self._config_entry.options.get(CONF_VOLUME_STEP, 0.05) * (max_val - min_val)
+            new_value = max(min_val, current_value - step)
+            await self._set_volume_entity_value(new_value)
 
     async def async_set_volume_level(self, volume: float) -> None:
         """Set volume level, range 0..1."""
-        if volume_entity := self._entity_refs.get(CONF_VOLUME_ENTITY):
-            domain = volume_entity.split(".", 1)[0]
-            service = "set_value" if domain == "input_number" else "set_value"
-
-            await self.hass.services.async_call(
-                domain, service, {ATTR_ENTITY_ID: volume_entity, "value": volume * 100}
-            )
+        entity_value = self._normalize_volume_to_entity_range(volume)
+        await self._set_volume_entity_value(volume)
 
     async def async_mute_volume(self, mute: bool) -> None:
         """Mute or unmute media player."""
@@ -661,13 +623,19 @@ class CCPlayerMediaPlayer(MediaPlayerEntity):
 
     async def async_select_source(self, source: str) -> None:
         """Select input source."""
-        if source_entity := self._entity_refs.get(CONF_SOURCE_ENTITY):
-            domain = source_entity.split(".", 1)[0]
-            service = "select_option" if domain == "input_select" else "select_option"
-
+        source_entity = self._entity_refs.get(CONF_SOURCE_ENTITY)
+        if not source_entity:
+            return
+            
+        domain = source_entity.split(".", 1)[0]
+        service = "select_option"
+        
+        try:
             await self.hass.services.async_call(
                 domain, service, {ATTR_ENTITY_ID: source_entity, "option": source}
             )
+        except Exception as ex:
+            _LOGGER.error("Failed to select source %s: %s", source, ex)
 
     async def async_media_play(self) -> None:
         """Send play command."""
@@ -715,16 +683,20 @@ class CCPlayerMediaPlayer(MediaPlayerEntity):
     async def async_media_seek(self, position: float) -> None:
         """Send seek command."""
         seek_actions = self._actions.get(CONF_SEEK_ACTION)
-        pos_pct = (
-            (100 * position) / self._attr_media_duration
-            if self._attr_media_duration
-            else None
-        )
-        if pos_pct is not None:
-            position = pos_pct
-        if seek_actions:
-            template_vars = {"position": position, "seek_position": position}
-            await self._call_action_list(CONF_SEEK_ACTION, template_vars)
+        if not seek_actions:
+            return
+            
+        # Calculate position as percentage if duration is available
+        seek_position = position
+        if self._attr_media_duration and self._attr_media_duration > 0:
+            seek_position = (position / self._attr_media_duration) * 100
+            
+        template_vars = {
+            "position": position,
+            "seek_position": seek_position,
+            "position_pct": seek_position,
+        }
+        await self._call_action_list(CONF_SEEK_ACTION, template_vars)
 
     @property
     def media_position(self) -> int | None:
@@ -866,43 +838,15 @@ class CCPlayerMediaPlayer(MediaPlayerEntity):
 
     def _has_active_media(self) -> bool:
         """Check if we have active media info indicating playback."""
-        # Check if we have meaningful media info
-        title_entity = self._entity_refs.get(CONF_MEDIA_TITLE_ENTITY)
-        artist_entity = self._entity_refs.get(CONF_MEDIA_ARTIST_ENTITY)
-
-        if title_entity:
-            title_state = self.hass.states.get(title_entity)
-            if title_state and title_state.state not in (
-                None,
-                "unknown",
-                "unavailable",
-                "",
-            ):
-                return True
-
-        if artist_entity:
-            artist_state = self.hass.states.get(artist_entity)
-            if artist_state and artist_state.state not in (
-                None,
-                "unknown",
-                "unavailable",
-                "",
-            ):
-                return True
-
-        # Check if position is updating (indicates active playback)
-        position_entity = self._entity_refs.get(CONF_MEDIA_POSITION_ENTITY)
-        if position_entity:
-            state = self.hass.states.get(position_entity)
-            if state and state.state not in (None, "unknown", "unavailable"):
-                try:
-                    new_position = float(state.state)
-                    if new_position > 0:
-                        return True
-                except (ValueError, TypeError):
-                    pass
-
-        return False
+        # Check for meaningful media title or artist
+        if self._get_entity_state_value(self._entity_refs.get(CONF_MEDIA_TITLE_ENTITY)):
+            return True
+        if self._get_entity_state_value(self._entity_refs.get(CONF_MEDIA_ARTIST_ENTITY)):
+            return True
+            
+        # Check if position is greater than 0 (indicates active playback)
+        position = self._get_numeric_state_value(self._entity_refs.get(CONF_MEDIA_POSITION_ENTITY))
+        return position is not None and position > 0
 
     async def async_browse_media(
         self, media_content_type: str | None = None, media_content_id: str | None = None

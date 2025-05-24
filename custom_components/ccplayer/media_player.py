@@ -735,6 +735,16 @@ class CCPlayerMediaPlayer(MediaPlayerEntity):
             "announce": announce,
             **kwargs,
         }
+
+        if media_source.is_media_source_id(media_id):
+                play_item = await media_source.async_resolve_media(self.hass, media_id, self.entity_id)
+                # play_item returns a relative URL if it has to be resolved on the Home Assistant host
+                # This call will turn it into a full URL
+                media_id = async_process_play_media_url(self.hass, play_item.url)
+
+        # Replace this with calling your media player play media function.
+        await self._media_player.play_url(media_id)
+
         await self._call_action_list(CONF_PLAY_MEDIA_ACTION, template_vars)
 
     async def async_clear_playlist(self) -> None:

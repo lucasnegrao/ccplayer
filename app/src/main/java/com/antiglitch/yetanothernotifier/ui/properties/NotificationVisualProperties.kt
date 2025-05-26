@@ -14,6 +14,7 @@ object PropertyRanges {
     val DURATION = 1000L..10000L
     val SCALE = 0.1f..1.0f
     val CORNER_RADIUS = 0.dp..30.dp
+    val MARGIN = 0.dp..64.dp // Add reasonable max margin
     
     // Default step sizes for UI controls
     val DURATION_STEP = 500L
@@ -28,7 +29,8 @@ data class NotificationVisualProperties(
     // Width and height are computed properties based on scale and aspect ratio
     val cornerRadius: Dp = 12.dp,
     val gravity: Gravity = Gravity.TOP_CENTER,
-    val roundedCorners: Boolean = true
+    val roundedCorners: Boolean = true,
+    val margin: Dp = 16.dp // <-- Add margin property with default
 ) {
     // Computed properties
     val width: Dp
@@ -47,6 +49,9 @@ data class NotificationVisualProperties(
         
         fun validateCornerRadius(value: Dp): Dp =
             value.coerceIn(PropertyRanges.CORNER_RADIUS)
+        
+        fun validateMargin(value: Dp): Dp =
+            value.coerceIn(PropertyRanges.MARGIN)
     }
 }
 

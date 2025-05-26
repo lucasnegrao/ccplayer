@@ -13,8 +13,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -27,7 +25,7 @@ import androidx.tv.material3.Text
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
-import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.IntOffset
 import kotlin.math.roundToInt
 
@@ -40,7 +38,11 @@ fun TvFriendlySlider(
     stepSize: Float,
     modifier: Modifier = Modifier,
     formatValue: (Float) -> String = { it.toString() },
-    showValueInTrack: Boolean = true
+    showValueInTrack: Boolean = true,
+    fillBackgroundColor: Color = MaterialTheme.colorScheme.secondary,
+    handleColor: Color = MaterialTheme.colorScheme.surface,
+    textColor: Color = MaterialTheme.colorScheme.onSurface,
+    surfaceColor: Color = MaterialTheme.colorScheme.surface
 ) {
     // Calculate current progress percentage (0-1)
     val progress = (value - valueRange.start) / (valueRange.endInclusive - valueRange.start)
@@ -82,14 +84,14 @@ fun TvFriendlySlider(
                 .fillMaxWidth()
                 .height(32.dp) // Visual height of the track
                 .clip(RoundedCornerShape(16.dp)) // Clip the track and its fill
-                .background(MaterialTheme.colorScheme.onSurface)
+                .background(surfaceColor)
                 .onGloballyPositioned {
                     trackWidth = it.size.width.toFloat()
                     trackWidthPx = it.size.width
                 }
                 .border(
                     width = if (isFocused.value) 2.dp else 0.dp,
-                    color = if (isFocused.value) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    color = if (isFocused.value) MaterialTheme.colorScheme.primary else surfaceColor,
                     shape = RoundedCornerShape(16.dp)
                 ),
             contentAlignment = Alignment.CenterStart
@@ -107,7 +109,7 @@ fun TvFriendlySlider(
                         .fillMaxWidth(fillRatio)
                         .fillMaxHeight()
                         .clip(RoundedCornerShape(16.dp)) // Clip fill to track shape
-                        .background(MaterialTheme.colorScheme.onSecondary)
+                        .background(fillBackgroundColor)
                 )
                 
                 // VALUE TEXT: Numerical display in center of track
@@ -117,7 +119,7 @@ fun TvFriendlySlider(
                         style = MaterialTheme.typography.bodyMedium,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.fillMaxWidth(),
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = textColor
                     )
                 }
             }
@@ -203,7 +205,7 @@ fun TvFriendlySlider(
                         }
                         .padding(4.dp)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.onSurface)
+                        .background(handleColor)
                         .border(
                             width = 0.dp,
                             color = MaterialTheme.colorScheme.onSecondary,

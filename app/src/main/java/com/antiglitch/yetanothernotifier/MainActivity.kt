@@ -1,6 +1,7 @@
 package com.antiglitch.yetanothernotifier
 
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,6 +12,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.tv.material3.Text
 import androidx.tv.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -30,6 +33,11 @@ import com.antiglitch.yetanothernotifier.ui.properties.VisualPropertiesRepositor
 import com.antiglitch.yetanothernotifier.ui.components.NotificationCard
 import com.antiglitch.yetanothernotifier.ui.fragments.NotificationPropertiesFragment
 import com.antiglitch.yetanothernotifier.ui.theme.YetAnotherNotifierTheme
+import com.antiglitch.yetanothernotifier.ui.properties.getAlignmentForGravity
+import com.antiglitch.yetanothernotifier.ui.properties.getOppositeAlignment
+import com.antiglitch.yetanothernotifier.ui.properties.getOppositeOrientation
+import com.antiglitch.yetanothernotifier.ui.properties.Orientation
+import androidx.compose.ui.Alignment
 
 class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalTvMaterial3Api::class)
@@ -43,7 +51,8 @@ class MainActivity : ComponentActivity() {
                     // Explicitly set surface color to ensure dark background
 //                    color = MaterialTheme.colorScheme.background
                 ) {
-                    NotificationDemo()
+                    NotificationPropertiesScreen()
+                    
                 }
             }
         }
@@ -52,75 +61,39 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-fun NotificationDemo() {
+fun NotificationPropertiesScreen() {
     val repository = VisualPropertiesRepository.getInstance()
     val notificationProperties by repository.notificationProperties.collectAsState()
-    var showControls by remember { mutableStateOf(false) }
+    val gravity = notificationProperties.gravity
+    val margin = notificationProperties.margin
     
-    if (showControls) {
-        Row(modifier = Modifier.fillMaxSize()) {
-            // Properties Panel (Left Side)
-            NotificationPropertiesFragment(
-                modifier = Modifier.weight(0.4f)
-            )
-            
-            Spacer(modifier = Modifier.width(16.dp))
-            
-            // Notification Preview Area (Right Side)
-            Box(modifier = Modifier.weight(0.6f)) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "Live Preview",
-                        style = MaterialTheme.typography.headlineMedium
-                    )
-                    
-                    Spacer(modifier = Modifier.height(16.dp))
-                    
-                    Button(onClick = { showControls = false }) {
-                        Text("Back to Demo")
+    // Log gravity value to verify it's changing
+    Log.d("NotificationScreen", "Current gravity: ${gravity.name}, Margin: $margin")
+
+    Box(modifier = Modifier.fillMaxSize()) {
+
+        NotificationCard(
+            modifier = Modifier
+                .align(getAlignmentForGravity(gravity))
+                .padding(margin) // Use margin directly
+        )
+
+        // Properties panel on the opposite side, less than half screen
+        NotificationPropertiesFragment(
+            modifier = Modifier
+                .then(
+                    when (getOppositeOrientation(gravity)) {
+                        Orientation.Horizontal -> Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(0.4f)
+                            .align(getOppositeAlignment(gravity))
+                        Orientation.Vertical -> Modifier
+                            .fillMaxWidth()
+                            .fillMaxHeight(0.4f)
+                            .align(getOppositeAlignment(gravity))
                     }
-                }
-                
-                // Show notification card in the preview area (non-blocking)
-                NotificationCard()
-            }
-        }
-    } else {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = "Notification Properties Demo",
-                style = MaterialTheme.typography.headlineLarge
-            )
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            Text(text = "Duration: ${notificationProperties.duration}ms")
-            Text(text = "Scale: ${notificationProperties.scale}")
-            Text(text = "Aspect: ${notificationProperties.aspect}")
-            Text(text = "Size: ${notificationProperties.width} x ${notificationProperties.height}")
-            Text(text = "Gravity: ${notificationProperties.gravity}")
-            Text(text = "Rounded Corners: ${notificationProperties.roundedCorners}")
-            Text(text = "Corner Radius: ${notificationProperties.cornerRadius}")
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            Button(onClick = { showControls = true }) {
-                Text("Open Live Editor")
-            }
-        }
+                )
+                .padding(8.dp)
+        )
     }
-}
-
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    NotificationDemo()
 }

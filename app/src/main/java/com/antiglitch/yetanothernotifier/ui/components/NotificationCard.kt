@@ -14,6 +14,7 @@ import androidx.tv.material3.Text
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.RectangleShape
 import com.antiglitch.yetanothernotifier.ui.properties.*
+import com.antiglitch.yetanothernotifier.ui.properties.NotificationUtils
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -22,9 +23,9 @@ fun NotificationCard(
 ) {
     val repository = VisualPropertiesRepository.getInstance()
     val properties by repository.notificationProperties.collectAsState()
-    
+
     Box(
-        modifier = modifier.fillMaxSize()
+        modifier = modifier
     ) {
         Card(
             modifier = Modifier
@@ -32,23 +33,7 @@ fun NotificationCard(
                     width = properties.width,
                     height = properties.height
                 )
-                .graphicsLayer(
-                    scaleX = properties.scale,
-                    scaleY = properties.scale
-                )
-                .then(
-                    when (properties.gravity) {
-                        Gravity.TOP_START -> Modifier.align(Alignment.TopStart)
-                        Gravity.TOP_CENTER -> Modifier.align(Alignment.TopCenter)
-                        Gravity.TOP_END -> Modifier.align(Alignment.TopEnd)
-                        Gravity.CENTER_START -> Modifier.align(Alignment.CenterStart)
-                        Gravity.CENTER -> Modifier.align(Alignment.Center)
-                        Gravity.CENTER_END -> Modifier.align(Alignment.CenterEnd)
-                        Gravity.BOTTOM_START -> Modifier.align(Alignment.BottomStart)
-                        Gravity.BOTTOM_CENTER -> Modifier.align(Alignment.BottomCenter)
-                        Gravity.BOTTOM_END -> Modifier.align(Alignment.BottomEnd)
-                    }
-                ),
+            ,
             shape = CardDefaults.shape(
                 shape = if (properties.roundedCorners) {
                     RoundedCornerShape(properties.cornerRadius)

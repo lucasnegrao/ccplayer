@@ -16,6 +16,11 @@ class VisualPropertiesRepository {
         _notificationProperties.value = _notificationProperties.value.copy(duration = duration)
     }
 
+    fun updateNotificationMargin(margin: androidx.compose.ui.unit.Dp) {
+        _notificationProperties.value = _notificationProperties.value.copy(margin = margin)
+    }
+
+
     fun updateNotificationScale(scale: Float) {
         _notificationProperties.value = _notificationProperties.value.copy(scale = scale)
     }

@@ -42,23 +42,25 @@ fun TvFriendlySlider(
     formatValue: (Float) -> String = { it.toString() },
     showValueInTrack: Boolean = true
 ) {
+    // Calculate current progress percentage (0-1)
     val progress = (value - valueRange.start) / (valueRange.endInclusive - valueRange.start)
+    
+    // Focus management
     val sliderInteractionSource = remember { MutableInteractionSource() }
     val isFocused = sliderInteractionSource.collectIsFocusedAsState()
     val sliderFocusRequester = remember { FocusRequester() }
     
-    // Track drag state
+    // Track dimensions and handle measurements
     var trackWidth by remember { mutableStateOf(0f) }
     var trackWidthPx by remember { mutableStateOf(0) }
     val handleSizePx = with(LocalDensity.current) { 32.dp.toPx() }
     val halfHandleSizePx = handleSizePx / 2
     
-    // Function to convert position to value
+    // Convert touch/pointer position to slider value
     val positionToValue = { position: Float ->
         val newProgress = (position / trackWidth).coerceIn(0f, 1f)
         val exactValue = valueRange.start + newProgress * (valueRange.endInclusive - valueRange.start)
         
-        // Snap to steps
         if (stepSize > 0) {
             val steps = ((exactValue - valueRange.start) / stepSize).roundToInt()
             (valueRange.start + steps * stepSize).coerceIn(valueRange.start, valueRange.endInclusive)
@@ -67,113 +69,126 @@ fun TvFriendlySlider(
         }
     }
     
+    // Main slider container
     Box(
         modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp)
             .height(32.dp)
             .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            // Get track width for calculations
+            .background(MaterialTheme.colorScheme.onSurface)
             .onGloballyPositioned {
                 trackWidth = it.size.width.toFloat()
                 trackWidthPx = it.size.width
             }
-            // Remove the border when unfocused to fix the thin border issue
-            .then(
-                if (isFocused.value) {
-                    Modifier.border(
-                        width = 2.dp,
-                        color = MaterialTheme.colorScheme.primary,
-                        shape = RoundedCornerShape(16.dp)
-                    )
-                } else {
-                    Modifier
-                }
+            // Use a standard border that doesn't change the internal layout
+            .border(
+                width = if (isFocused.value) 2.dp else 0.dp,
+                color = if (isFocused.value) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                shape = RoundedCornerShape(16.dp)
             ),
         contentAlignment = Alignment.CenterStart
     ) {
-        // Calculate handle position for filling alignment
-        val handlePosition = progress * (trackWidthPx - handleSizePx) + handleSizePx
-        val fillRatio = handlePosition / trackWidthPx
+        if (trackWidthPx > 0) {
+            // Calculate handle position independent of focus state
+            val adjustedTrackWidth = maxOf(trackWidthPx, handleSizePx.toInt())
+            val maxOffset = maxOf(0, adjustedTrackWidth - handleSizePx.toInt())
+            
+            // Calculate handle position based solely on progress value
+            val handleLeftEdge = (progress * maxOffset).roundToInt()
+            val handleRightEdge = handleLeftEdge + handleSizePx
+            val fillRatio = (handleRightEdge / adjustedTrackWidth).coerceIn(0f, 1f)
 
-        // Filled portion of the track - aligned to handle center
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(fillRatio)
-                .fillMaxHeight()
-                .clip(RoundedCornerShape(16.dp))
-                .background(MaterialTheme.colorScheme.primary)
-        )
-        
-        // Value text in the middle of the track
-        if (showValueInTrack) {
-            Text(
-                text = formatValue(value),
-                style = MaterialTheme.typography.bodyMedium,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.onSurface
+            // TRACK FILL: Colored portion that represents progress
+            // Force a separate composable to ensure proper clipping
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(fillRatio)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.onSecondary)
             )
-        }
-        
-        // Handle with centered positioning and improved focus
-        Box(
-            modifier = Modifier
-                .focusable(interactionSource = sliderInteractionSource)
-                .focusRequester(sliderFocusRequester)
-                .offset {
-                    // Position handle so it moves correctly along the track
-                    val handleLeftEdgePosition = (progress * (trackWidthPx - handleSizePx)).roundToInt()
-                    IntOffset(handleLeftEdgePosition, 0)
+            
+            // VALUE TEXT: Numerical display in center of track
+            if (showValueInTrack) {
+                Text(
+                    text = formatValue(value),
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+            
+            // HANDLE CONTAINER: Position is calculated independent of focus state
+            Box(
+                modifier = Modifier.offset {
+                    IntOffset(handleLeftEdge, 0)
                 }
-                .onKeyEvent { keyEvent ->
-                    if (keyEvent.type == KeyEventType.KeyDown) {
-                        when (keyEvent.key) {
-                            Key.DirectionRight -> {
-                                if (value < valueRange.endInclusive) {
-                                    onValueChange(minOf(value + stepSize, valueRange.endInclusive))
+            ) {
+                // FOCUS GLOW: Translucent highlight around handle when focused
+                // Focus effect should only change appearance, not position
+                if (isFocused.value) {
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
+                            .align(Alignment.Center)
+                    )
+                }
+                
+                // HANDLE: Interactive draggable element
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .focusable(interactionSource = sliderInteractionSource)
+                        .focusRequester(sliderFocusRequester)
+                        .onKeyEvent { keyEvent ->
+                            if (keyEvent.type == KeyEventType.KeyDown) {
+                                when (keyEvent.key) {
+                                    Key.DirectionRight -> {
+                                        if (value < valueRange.endInclusive) {
+                                            onValueChange(minOf(value + stepSize, valueRange.endInclusive))
+                                        }
+                                        true
+                                    }
+                                    Key.DirectionLeft -> {
+                                        if (value > valueRange.start) {
+                                            onValueChange(maxOf(value - stepSize, valueRange.start))
+                                        }
+                                        true
+                                    }
+                                    else -> false
                                 }
-                                true
-                            }
-                            Key.DirectionLeft -> {
-                                if (value > valueRange.start) {
-                                    onValueChange(maxOf(value - stepSize, valueRange.start))
-                                }
-                                true
-                            }
-                            else -> false
+                            } else false
                         }
-                    } else false
-                }
-                // Add drag and tap support for mouse/touch
-                .pointerInput(Unit) {
-                    detectTapGestures { offset ->
-                        val newValue = positionToValue(offset.x)
-                        onValueChange(newValue)
-                    }
-                }
-                .pointerInput(Unit) {
-                    detectDragGestures { change, dragAmount ->
-                        change.consume()
-                        val newValue = positionToValue(change.position.x)
-                        onValueChange(newValue)
-                    }
-                }
-                .size(32.dp)
-                .padding(4.dp)
-                .clip(CircleShape)
-                .background(
-                    if (isFocused.value) MaterialTheme.colorScheme.primary 
-                    else MaterialTheme.colorScheme.secondary
+                        // Add drag and tap support for mouse/touch
+                        .pointerInput(Unit) {
+                            detectTapGestures { offset ->
+                                val newValue = positionToValue(offset.x)
+                                onValueChange(newValue)
+                            }
+                        }
+                        .pointerInput(Unit) {
+                            detectDragGestures { change, dragAmount ->
+                                change.consume()
+                                val newValue = positionToValue(change.position.x)
+                                onValueChange(newValue)
+                            }
+                        }
+                        .padding(4.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.onSurface)
+                        .border(
+                            width = 0.dp,
+                            color = MaterialTheme.colorScheme.onSecondary,
+                            shape = CircleShape
+                        )
+                        .align(Alignment.Center)
                 )
-                .border(
-                    width = 2.dp,
-                    color = if (isFocused.value) MaterialTheme.colorScheme.onPrimary 
-                           else MaterialTheme.colorScheme.onSecondary,
-                    shape = CircleShape
-                )
-        )
+            }
+        }
     }
 }
 

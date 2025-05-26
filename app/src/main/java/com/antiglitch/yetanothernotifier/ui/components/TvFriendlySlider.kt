@@ -69,62 +69,77 @@ fun TvFriendlySlider(
         }
     }
     
-    // Main slider container
+    // Main slider container - OuterBox
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp)
-            .height(32.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.onSurface)
-            .onGloballyPositioned {
-                trackWidth = it.size.width.toFloat()
-                trackWidthPx = it.size.width
-            }
-            // Use a standard border that doesn't change the internal layout
-            .border(
-                width = if (isFocused.value) 2.dp else 0.dp,
-                color = if (isFocused.value) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                shape = RoundedCornerShape(16.dp)
-            ),
+            .padding(vertical = 8.dp), // Provides space for glow vertically
         contentAlignment = Alignment.CenterStart
     ) {
+        // InnerBox - Represents the visual track
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(32.dp) // Visual height of the track
+                .clip(RoundedCornerShape(16.dp)) // Clip the track and its fill
+                .background(MaterialTheme.colorScheme.onSurface)
+                .onGloballyPositioned {
+                    trackWidth = it.size.width.toFloat()
+                    trackWidthPx = it.size.width
+                }
+                .border(
+                    width = if (isFocused.value) 2.dp else 0.dp,
+                    color = if (isFocused.value) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    shape = RoundedCornerShape(16.dp)
+                ),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            if (trackWidthPx > 0) {
+                val adjustedTrackWidthInner = maxOf(trackWidthPx, handleSizePx.toInt())
+                val maxOffsetInner = maxOf(0, adjustedTrackWidthInner - handleSizePx.toInt())
+                val handleLeftEdgeInner = (progress * maxOffsetInner).roundToInt()
+                val handleRightEdgeInner = handleLeftEdgeInner + handleSizePx
+                val fillRatio = (handleRightEdgeInner / adjustedTrackWidthInner).coerceIn(0f, 1f)
+
+                // TRACK FILL: Colored portion that represents progress
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(fillRatio)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(16.dp)) // Clip fill to track shape
+                        .background(MaterialTheme.colorScheme.onSecondary)
+                )
+                
+                // VALUE TEXT: Numerical display in center of track
+                if (showValueInTrack) {
+                    Text(
+                        text = formatValue(value),
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+        }
+
+        // Handle components are children of OuterBox, sibling to InnerBox (track)
+        // This prevents them from being clipped by InnerBox's height/clip.
         if (trackWidthPx > 0) {
-            // Calculate handle position independent of focus state
+            // Recalculate handleLeftEdge based on trackWidthPx if not already available
+            // or ensure it's correctly scoped. For this change, assume it's available.
             val adjustedTrackWidth = maxOf(trackWidthPx, handleSizePx.toInt())
             val maxOffset = maxOf(0, adjustedTrackWidth - handleSizePx.toInt())
-            
-            // Calculate handle position based solely on progress value
             val handleLeftEdge = (progress * maxOffset).roundToInt()
-            val handleRightEdge = handleLeftEdge + handleSizePx
-            val fillRatio = (handleRightEdge / adjustedTrackWidth).coerceIn(0f, 1f)
 
-            // TRACK FILL: Colored portion that represents progress
-            // Force a separate composable to ensure proper clipping
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(fillRatio)
-                    .fillMaxHeight()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(MaterialTheme.colorScheme.onSecondary)
-            )
-            
-            // VALUE TEXT: Numerical display in center of track
-            if (showValueInTrack) {
-                Text(
-                    text = formatValue(value),
-                    style = MaterialTheme.typography.bodyMedium,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-            
             // HANDLE CONTAINER: Position is calculated independent of focus state
             Box(
-                modifier = Modifier.offset {
-                    IntOffset(handleLeftEdge, 0)
-                }
+                modifier = Modifier
+                    .offset {
+                        IntOffset(handleLeftEdge, 0)
+                    }
+                    .size(48.dp) // Ensure the container size is fixed and large enough for the glow
+                    .align(Alignment.CenterStart) // Align with the InnerBox (track) vertically
             ) {
                 // FOCUS GLOW: Translucent highlight around handle when focused
                 // Focus effect should only change appearance, not position

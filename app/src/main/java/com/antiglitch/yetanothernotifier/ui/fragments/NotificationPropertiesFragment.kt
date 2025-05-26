@@ -14,7 +14,16 @@ import androidx.tv.material3.Button
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Card
 import androidx.tv.material3.CardDefaults
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.graphics.Color
+import androidx.tv.material3.Icon
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.res.painterResource
+import com.antiglitch.yetanothernotifier.R
 import com.antiglitch.yetanothernotifier.ui.properties.*
+import com.antiglitch.yetanothernotifier.ui.components.TvFriendlySlider
+import com.antiglitch.yetanothernotifier.ui.components.TvFriendlyChipsSelect
 
 @OptIn(ExperimentalTvMaterial3Api::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -46,11 +55,11 @@ fun NotificationPropertiesFragment(
                     text = "Duration: ${properties.duration}ms",
                     style = MaterialTheme.typography.titleMedium
                 )
-                Slider(
+                TvFriendlySlider(
                     value = properties.duration.toFloat(),
                     onValueChange = { repository.updateNotificationDuration(it.toLong()) },
                     valueRange = 1000f..10000f,
-                    steps = 17
+                    stepSize = 500f
                 )
             }
         }
@@ -64,38 +73,27 @@ fun NotificationPropertiesFragment(
                     text = "Scale: ${String.format("%.2f", properties.scale)}",
                     style = MaterialTheme.typography.titleMedium
                 )
-                Slider(
+                TvFriendlySlider(
                     value = properties.scale,
                     onValueChange = { repository.updateNotificationScale(it) },
                     valueRange = 0.5f..2.0f,
-                    steps = 29
+                    stepSize = 0.05f,
+                    formatValue = { String.format("%.2f", it) }
                 )
             }
         }
         
-        // Aspect Ratio Control
+        // Aspect Ratio Control - Replace with TvFriendlyChipsSelect
         Card(
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Text(
-                    text = "Aspect: ${properties.aspect.displayName}",
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    AspectRatio.values().forEach { aspect ->
-                        FilterChip(
-                            onClick = { repository.updateNotificationAspect(aspect) },
-                            label = { Text(aspect.displayName, style = MaterialTheme.typography.labelSmall) },
-                            selected = properties.aspect == aspect,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-            }
+            TvFriendlyChipsSelect(
+                title = "Aspect Ratio",
+                options = AspectRatio.values().toList(),
+                selectedOption = properties.aspect,
+                onOptionSelected = { repository.updateNotificationAspect(it) },
+                optionLabel = { it.displayName }
+            )
         }
         
         // Size Controls
@@ -108,64 +106,22 @@ fun NotificationPropertiesFragment(
                     style = MaterialTheme.typography.titleMedium
                 )
                 
-                Text(text = "W: ${properties.width}", style = MaterialTheme.typography.bodySmall)
-                Slider(
-                    value = properties.width.value,
-                    onValueChange = { 
-                        repository.updateNotificationSize(it.dp, properties.height)
-                    },
-                    valueRange = 200f..600f,
-                    steps = 39
-                )
-                
-                Text(text = "H: ${properties.height}", style = MaterialTheme.typography.bodySmall)
-                Slider(
-                    value = properties.height.value,
-                    onValueChange = { 
-                        repository.updateNotificationSize(properties.width, it.dp)
-                    },
-                    valueRange = 60f..300f,
-                    steps = 23
-                )
+
+
             }
         }
         
-        // Gravity Control
+        // Gravity Control - Replace with TvFriendlyChipsSelect
         Card(
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Text(
-                    text = "Gravity: ${properties.gravity.displayName}",
-                    style = MaterialTheme.typography.titleMedium
-                )
-                
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Gravity.gravityGrid.forEach { row ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(2.dp)
-                        ) {
-                            row.forEach { gravity ->
-                                Row(
-                                    modifier = Modifier.weight(1f),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    RadioButton(
-                                        selected = properties.gravity == gravity,
-                                        onClick = { repository.updateNotificationGravity(gravity) }
-                                    )
-                                    Text(
-                                        text = gravity.displayName.replace(" ", "\n"),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        modifier = Modifier.padding(start = 2.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            TvFriendlyChipsSelect(
+                title = "Gravity",
+                options = Gravity.values().toList(),
+                selectedOption = properties.gravity,
+                onOptionSelected = { repository.updateNotificationGravity(it) },
+                optionLabel = { it.displayName }
+            )
         }
         
         // Corner Controls
@@ -190,11 +146,12 @@ fun NotificationPropertiesFragment(
                 
                 if (properties.roundedCorners) {
                     Text(text = "Radius: ${properties.cornerRadius}", style = MaterialTheme.typography.bodySmall)
-                    Slider(
+                    TvFriendlySlider(
                         value = properties.cornerRadius.value,
                         onValueChange = { repository.updateCornerRadius(it.dp) },
                         valueRange = 0f..50f,
-                        steps = 49
+                        stepSize = 1f,
+                        formatValue = { "${it.toInt()}dp" }
                     )
                 }
             }

@@ -1,34 +1,51 @@
 package com.antiglitch.yetanothernotifier.ui.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.darkColorScheme
-import androidx.tv.material3.lightColorScheme
+
+/**
+ * Custom dark color scheme optimized for TV interfaces
+ */
+@OptIn(ExperimentalTvMaterial3Api::class)
+private val TvDarkColorScheme = darkColorScheme(
+    // Primary colors
+    primary = Purple80,
+    onPrimary = Purple20,
+    primaryContainer = Purple30,
+    onPrimaryContainer = Purple90,
+
+    // Secondary colors
+    secondary = Orange80,
+    onSecondary = Orange20,
+    secondaryContainer = Orange30,
+    onSecondaryContainer = Orange90,
+
+    // Background colors - ensure these are dark
+    background = DarkGray,
+    onBackground = LightGray,
+
+    // Surface colors for cards and other components
+    surface = DarkGrayVariant,
+    onSurface = White,
+    surfaceVariant = DarkGrayVariant.copy(alpha = 0.7f),
+    onSurfaceVariant = LightGrayVariant,
+
+    // Error colors
+    error = Red80,
+    onError = Red20
+)
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun YetAnotherNotifierTheme(
-    isInDarkTheme: Boolean = isSystemInDarkTheme(),
-    content: @Composable () -> Unit,
+    // Always use dark theme by default for TV interfaces
+    content: @Composable () -> Unit
 ) {
-    val colorScheme = if (isInDarkTheme) {
-        darkColorScheme(
-            primary = Purple80,
-            secondary = PurpleGrey80,
-            tertiary = Pink80
-        )
-    } else {
-        lightColorScheme(
-            primary = Purple40,
-            secondary = PurpleGrey40,
-            tertiary = Pink40
-        )
-    }
+    // Force our custom dark theme
     MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography,
+        colorScheme = TvDarkColorScheme,
         content = content
     )
 }

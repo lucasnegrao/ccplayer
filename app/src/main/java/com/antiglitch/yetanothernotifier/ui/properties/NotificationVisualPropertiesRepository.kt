@@ -24,9 +24,6 @@ class VisualPropertiesRepository {
         _notificationProperties.value = _notificationProperties.value.copy(aspect = aspect)
     }
 
-    fun updateNotificationSize(width: androidx.compose.ui.unit.Dp, height: androidx.compose.ui.unit.Dp) {
-        _notificationProperties.value = _notificationProperties.value.copy(width = width, height = height)
-    }
 
     fun updateNotificationGravity(gravity: Gravity) {
         _notificationProperties.value = _notificationProperties.value.copy(gravity = gravity)

@@ -9,16 +9,46 @@ sealed class ComponentType {
     // Add more component types here as needed
 }
 
+// Ranges for numeric properties
+object PropertyRanges {
+    val DURATION = 1000L..10000L
+    val SCALE = 0.1f..1.0f
+    val CORNER_RADIUS = 0.dp..30.dp
+    
+    // Default step sizes for UI controls
+    val DURATION_STEP = 500L
+    val SCALE_STEP = 0.05f
+    val CORNER_RADIUS_STEP = 2.dp
+}
+
 data class NotificationVisualProperties(
     val duration: Long = 3000L, // milliseconds
-    val scale: Float = 1.0f,
+    val scale: Float = 0.5f, // Scale as percentage of screen (0.5 = 50% of screen width)
     val aspect: AspectRatio = AspectRatio.WIDE,
-    val width: Dp = 320.dp,
-    val height: Dp = 80.dp,
+    // Width and height are computed properties based on scale and aspect ratio
+    val cornerRadius: Dp = 12.dp,
     val gravity: Gravity = Gravity.TOP_CENTER,
-    val roundedCorners: Boolean = true,
-    val cornerRadius: Dp = 12.dp
-)
+    val roundedCorners: Boolean = true
+) {
+    // Computed properties
+    val width: Dp
+        get() = (scale * 1000).dp  // This is just a placeholder - would be calculated from actual screen width
+    
+    val height: Dp
+        get() = (width.value / aspect.ratio).dp
+    
+    companion object {
+        // Validation methods to ensure values stay within ranges
+        fun validateDuration(value: Long): Long = 
+            value.coerceIn(PropertyRanges.DURATION)
+        
+        fun validateScale(value: Float): Float =
+            value.coerceIn(PropertyRanges.SCALE)
+        
+        fun validateCornerRadius(value: Dp): Dp =
+            value.coerceIn(PropertyRanges.CORNER_RADIUS)
+    }
+}
 
 enum class AspectRatio(val ratio: Float, val displayName: String) {
     ULTRA_WIDE(6.0f, "Ultra Wide"),
@@ -56,4 +86,13 @@ enum class Gravity(val displayName: String) {
 sealed class VisualProperties {
     data class Notification(val properties: NotificationVisualProperties) : VisualProperties()
     // Add more component properties here as needed
+}
+
+// Updated theme options to match available palettes
+enum class NotificationTheme(val displayName: String) {
+    DEFAULT("Default Dark"),
+    LIGHT("Light"),
+    MATERIAL_YOU("Material You"), // Dynamic colors on supported devices
+    HIGH_CONTRAST("High Contrast"),
+    CLASSIC("Classic")
 }

@@ -29,17 +29,22 @@ import androidx.tv.material3.Button
 import com.antiglitch.yetanothernotifier.ui.properties.VisualPropertiesRepository
 import com.antiglitch.yetanothernotifier.ui.components.NotificationCard
 import com.antiglitch.yetanothernotifier.ui.fragments.NotificationPropertiesFragment
+import com.antiglitch.yetanothernotifier.ui.theme.YetAnotherNotifierTheme
 
 class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalTvMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            Surface(
-                modifier = Modifier.fillMaxSize(),
-                shape = RectangleShape
-            ) {
-                NotificationDemo()
+            YetAnotherNotifierTheme {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    shape = RectangleShape,
+                    // Explicitly set surface color to ensure dark background
+//                    color = MaterialTheme.colorScheme.background
+                ) {
+                    NotificationDemo()
+                }
             }
         }
     }

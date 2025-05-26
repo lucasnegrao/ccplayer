@@ -7,6 +7,7 @@ import android.provider.Settings
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,8 +50,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Make window transparent
-        window.decorView.setBackgroundColor(android.graphics.Color.TRANSPARENT)
 
         // Initial check for permission
         checkOverlayPermission()
@@ -61,7 +60,7 @@ class MainActivity : ComponentActivity() {
             YetAnotherNotifierTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    shape = RectangleShape,
+                    shape = RectangleShape
                 ) {
                     // Use the class-level state
                     if (hasOverlayPermission.value) {
@@ -99,7 +98,11 @@ fun NotificationPropertiesScreen() {
     val gravity = notificationProperties.gravity
     val margin = notificationProperties.margin
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Transparent)
+    ) {
 
         NotificationCard(
             modifier = Modifier

@@ -2,12 +2,7 @@ package com.antiglitch.yetanothernotifier.ui.properties
 
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.flow.Flow
-
-sealed class ComponentType {
-    object Notification : ComponentType()
-    // Add more component types here as needed
-}
+import kotlinx.serialization.Serializable
 
 // Ranges for numeric properties
 object PropertyRanges {
@@ -22,14 +17,17 @@ object PropertyRanges {
     val CORNER_RADIUS_STEP = 2.dp
 }
 
+@Serializable
 data class NotificationVisualProperties(
     val duration: Long = 3000L, // milliseconds
     val scale: Float = 0.5f, // Scale as percentage of screen (0.5 = 50% of screen width)
     val aspect: AspectRatio = AspectRatio.WIDE,
     // Width and height are computed properties based on scale and aspect ratio
+    @Serializable(with = DpSerializer::class)
     val cornerRadius: Dp = 12.dp,
     val gravity: Gravity = Gravity.TOP_CENTER,
     val roundedCorners: Boolean = true,
+    @Serializable(with = DpSerializer::class)
     val margin: Dp = 16.dp // <-- Add margin property with default
 ) {
     // Computed properties
@@ -55,6 +53,7 @@ data class NotificationVisualProperties(
     }
 }
 
+@Serializable
 enum class AspectRatio(val ratio: Float, val displayName: String) {
     ULTRA_WIDE(6.0f, "Ultra Wide"),
     WIDE(4.0f, "Wide"),
@@ -68,6 +67,7 @@ enum class AspectRatio(val ratio: Float, val displayName: String) {
     ULTRA_TALL(0.25f, "Ultra Tall")
 }
 
+@Serializable
 enum class Gravity(val displayName: String) {
     TOP_START("Top Left"),
     TOP_CENTER("Top Center"),
@@ -88,16 +88,11 @@ enum class Gravity(val displayName: String) {
     }
 }
 
-sealed class VisualProperties {
-    data class Notification(val properties: NotificationVisualProperties) : VisualProperties()
-    // Add more component properties here as needed
+// Custom serializer for Dp
+@Serializable
+private class DpSerializer : kotlinx.serialization.KSerializer<Dp> {
+    override val descriptor = kotlinx.serialization.descriptors.PrimitiveSerialDescriptor("Dp", kotlinx.serialization.descriptors.PrimitiveKind.FLOAT)
+    override fun serialize(encoder: kotlinx.serialization.encoding.Encoder, value: Dp) = encoder.encodeFloat(value.value)
+    override fun deserialize(decoder: kotlinx.serialization.encoding.Decoder): Dp = decoder.decodeFloat().dp
 }
 
-// Updated theme options to match available palettes
-enum class NotificationTheme(val displayName: String) {
-    DEFAULT("Default Dark"),
-    LIGHT("Light"),
-    MATERIAL_YOU("Material You"), // Dynamic colors on supported devices
-    HIGH_CONTRAST("High Contrast"),
-    CLASSIC("Classic")
-}

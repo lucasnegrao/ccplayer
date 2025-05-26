@@ -13,6 +13,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.platform.LocalContext
 import com.antiglitch.yetanothernotifier.ui.properties.*
 import com.antiglitch.yetanothernotifier.ui.properties.NotificationUtils
 
@@ -21,8 +22,9 @@ import com.antiglitch.yetanothernotifier.ui.properties.NotificationUtils
 fun NotificationCard(
     modifier: Modifier = Modifier
 ) {
-    val repository = VisualPropertiesRepository.getInstance()
-    val properties by repository.notificationProperties.collectAsState()
+    val context = LocalContext.current
+    val repository = NotificationVisualPropertiesRepository.getInstance(context)
+    val properties by repository.properties.collectAsState()
 
     Box(
         modifier = modifier

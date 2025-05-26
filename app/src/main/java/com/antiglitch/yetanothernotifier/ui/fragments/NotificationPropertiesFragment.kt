@@ -26,16 +26,18 @@ import com.antiglitch.yetanothernotifier.ui.components.TvFriendlySlider
 import com.antiglitch.yetanothernotifier.ui.components.TvFriendlyChipsSelect
 import androidx.compose.foundation.shape.RoundedCornerShape // Import for RoundedCornerShape
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.platform.LocalContext
 
 @OptIn(ExperimentalTvMaterial3Api::class, ExperimentalMaterial3Api::class)
 @Composable
 fun NotificationPropertiesFragment(
     modifier: Modifier = Modifier
 ) {
-    val repository = VisualPropertiesRepository.getInstance()
-    val properties by repository.notificationProperties.collectAsState()
+    val context = LocalContext.current
+    val repository = NotificationVisualPropertiesRepository.getInstance(context)
+    val properties by repository.properties.collectAsState()
 
-    androidx.tv.material3.Card( // Use androidx.tv.material3.Card for the outer container
+    Card( // Use androidx.tv.material3.Card for the outer container
         modifier = modifier, // Apply the modifier passed to the fragment here
         shape = CardDefaults.shape(
             shape = if (properties.roundedCorners) {
@@ -70,7 +72,7 @@ fun NotificationPropertiesFragment(
                     )
                     TvFriendlySlider(
                         value = properties.duration.toFloat(),
-                        onValueChange = { repository.updateNotificationDuration(it.toLong()) },
+                        onValueChange = { repository.updateDuration(it.toLong()) },
                         valueRange = 1000f..10000f,
                         stepSize = 500f
                     )
@@ -88,7 +90,7 @@ fun NotificationPropertiesFragment(
                     )
                     TvFriendlySlider(
                         value = properties.scale,
-                        onValueChange = { repository.updateNotificationScale(it) },
+                        onValueChange = { repository.updateScale(it) },
                         valueRange = 0.1f..1.0f, // Corrected scale range
                         stepSize = 0.05f,
                         formatValue = { String.format("%.2f", it) }
@@ -104,7 +106,7 @@ fun NotificationPropertiesFragment(
                     title = "Aspect Ratio",
                     options = AspectRatio.values().toList(),
                     selectedOption = properties.aspect,
-                    onOptionSelected = { repository.updateNotificationAspect(it) },
+                    onOptionSelected = { repository.updateAspect(it) },
                     optionLabel = { it.displayName }
                 )
             }
@@ -132,7 +134,7 @@ fun NotificationPropertiesFragment(
                     title = "Gravity",
                     options = Gravity.values().toList(),
                     selectedOption = properties.gravity,
-                    onOptionSelected = { repository.updateNotificationGravity(it) },
+                    onOptionSelected = { repository.updateGravity(it) },
                     optionLabel = { it.displayName }
                 )
             }
@@ -183,7 +185,7 @@ fun NotificationPropertiesFragment(
                         value = properties.margin.value,
                         onValueChange = {
                             val newMargin = it.dp // No need for a hard-coded range in properties, just clamp here if needed
-                            repository.updateNotificationMargin(newMargin)
+                            repository.updateMargin(newMargin)
                         },
                         valueRange = 0f..64f, // Simple and direct, 0 to 64 dp
                         stepSize = 2f,

@@ -1,54 +1,80 @@
 package com.antiglitch.yetanothernotifier.ui.properties
 
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import android.content.Context
+import androidx.compose.ui.unit.Dp
+import com.antiglitch.yetanothernotifier.data.datastore.PreferencesDataStoreImpl
+import com.antiglitch.yetanothernotifier.data.datastore.preferencesDataStore
+import com.antiglitch.yetanothernotifier.data.repository.BasePropertiesRepository
 
-class VisualPropertiesRepository {
-    private val _notificationProperties = MutableStateFlow(NotificationVisualProperties())
-    val notificationProperties: StateFlow<NotificationVisualProperties> = _notificationProperties.asStateFlow()
-
-    fun updateNotificationProperties(properties: NotificationVisualProperties) {
-        _notificationProperties.value = properties
+class NotificationVisualPropertiesRepository private constructor(
+    context: Context
+) : BasePropertiesRepository<NotificationVisualProperties>(
+    preferencesDataStore = PreferencesDataStoreImpl(context.preferencesDataStore),
+    keyPrefix = "notification_visual",
+    defaultProperties = NotificationVisualProperties()
+) {
+    
+    // Dynamic property updaters using reflection
+    fun updateDuration(duration: Long) {
+        val validDuration = NotificationVisualProperties.validateDuration(duration)
+        updateProperty(NotificationVisualProperties::duration, validDuration) { 
+            copy(duration = it) 
+        }
     }
 
-    fun updateNotificationDuration(duration: Long) {
-        _notificationProperties.value = _notificationProperties.value.copy(duration = duration)
+    fun updateMargin(margin: Dp) {
+        val validMargin = NotificationVisualProperties.validateMargin(margin)
+        updateProperty(NotificationVisualProperties::margin, validMargin) { 
+            copy(margin = it) 
+        }
     }
 
-    fun updateNotificationMargin(margin: androidx.compose.ui.unit.Dp) {
-        _notificationProperties.value = _notificationProperties.value.copy(margin = margin)
+    fun updateScale(scale: Float) {
+        val validScale = NotificationVisualProperties.validateScale(scale)
+        updateProperty(NotificationVisualProperties::scale, validScale) { 
+            copy(scale = it) 
+        }
     }
 
-
-    fun updateNotificationScale(scale: Float) {
-        _notificationProperties.value = _notificationProperties.value.copy(scale = scale)
+    fun updateAspect(aspect: AspectRatio) {
+        updateProperty(NotificationVisualProperties::aspect, aspect) { 
+            copy(aspect = it) 
+        }
     }
 
-    fun updateNotificationAspect(aspect: AspectRatio) {
-        _notificationProperties.value = _notificationProperties.value.copy(aspect = aspect)
-    }
-
-
-    fun updateNotificationGravity(gravity: Gravity) {
-        _notificationProperties.value = _notificationProperties.value.copy(gravity = gravity)
+    fun updateGravity(gravity: Gravity) {
+        updateProperty(NotificationVisualProperties::gravity, gravity) { 
+            copy(gravity = it) 
+        }
     }
 
     fun updateRoundedCorners(enabled: Boolean) {
-        _notificationProperties.value = _notificationProperties.value.copy(roundedCorners = enabled)
+        updateProperty(NotificationVisualProperties::roundedCorners, enabled) { 
+            copy(roundedCorners = it) 
+        }
     }
 
-    fun updateCornerRadius(radius: androidx.compose.ui.unit.Dp) {
-        _notificationProperties.value = _notificationProperties.value.copy(cornerRadius = radius)
+    fun updateCornerRadius(radius: Dp) {
+        val validRadius = NotificationVisualProperties.validateCornerRadius(radius)
+        updateProperty(NotificationVisualProperties::cornerRadius, validRadius) { 
+            copy(cornerRadius = it) 
+        }
+    }
+
+    // Batch update method
+    fun updateMultipleProperties(updates: NotificationVisualProperties.() -> NotificationVisualProperties) {
+        val currentProperties = properties.value
+        val newProperties = currentProperties.updates()
+        updateProperties(newProperties)
     }
 
     companion object {
         @Volatile
-        private var INSTANCE: VisualPropertiesRepository? = null
+        private var INSTANCE: NotificationVisualPropertiesRepository? = null
 
-        fun getInstance(): VisualPropertiesRepository {
+        fun getInstance(context: Context): NotificationVisualPropertiesRepository {
             return INSTANCE ?: synchronized(this) {
-                INSTANCE ?: VisualPropertiesRepository().also { INSTANCE = it }
+                INSTANCE ?: NotificationVisualPropertiesRepository(context.applicationContext).also { INSTANCE = it }
             }
         }
     }

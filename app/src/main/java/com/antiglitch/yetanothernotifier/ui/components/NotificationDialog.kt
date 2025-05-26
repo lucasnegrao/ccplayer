@@ -10,22 +10,24 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
-import com.antiglitch.yetanothernotifier.ui.properties.NotificationVisualProperties
-import com.antiglitch.yetanothernotifier.ui.properties.VisualPropertiesRepository
+import com.antiglitch.yetanothernotifier.ui.properties.NotificationVisualPropertiesRepository
+
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun NotificationDialog(
     onDismiss: () -> Unit
 ) {
-    val repository = VisualPropertiesRepository.getInstance()
-    val properties by repository.notificationProperties.collectAsState()
+    val context = LocalContext.current
+    val repository = NotificationVisualPropertiesRepository.getInstance(context)
+    val properties by repository.properties.collectAsState()
     
     Dialog(
         onDismissRequest = onDismiss,

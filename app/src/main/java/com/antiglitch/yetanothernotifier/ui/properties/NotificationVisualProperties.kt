@@ -20,22 +20,37 @@ data class NotificationVisualProperties(
     val cornerRadius: Dp = 12.dp
 )
 
-enum class AspectRatio(val ratio: Float) {
-    SQUARE(1.0f),
-    WIDE(4.0f),
-    TALL(0.5f)
+enum class AspectRatio(val ratio: Float, val displayName: String) {
+    ULTRA_WIDE(6.0f, "Ultra Wide"),
+    WIDE(4.0f, "Wide"),
+    CINEMA(2.35f, "Cinema"),
+    STANDARD(1.77f, "16:9"),
+    GOLDEN(1.618f, "Golden"),
+    CLASSIC(1.33f, "4:3"),
+    SQUARE(1.0f, "Square"),
+    PORTRAIT(0.75f, "3:4"),
+    TALL(0.5f, "Tall"),
+    ULTRA_TALL(0.25f, "Ultra Tall")
 }
 
-enum class Gravity {
-    TOP_START,
-    TOP_CENTER,
-    TOP_END,
-    CENTER_START,
-    CENTER,
-    CENTER_END,
-    BOTTOM_START,
-    BOTTOM_CENTER,
-    BOTTOM_END
+enum class Gravity(val displayName: String) {
+    TOP_START("Top Left"),
+    TOP_CENTER("Top Center"),
+    TOP_END("Top Right"),
+    CENTER_START("Middle Left"),
+    CENTER("Center"),
+    CENTER_END("Middle Right"),
+    BOTTOM_START("Bottom Left"),
+    BOTTOM_CENTER("Bottom Center"),
+    BOTTOM_END("Bottom Right");
+    
+    companion object {
+        val gravityGrid = listOf(
+            listOf(TOP_START, TOP_CENTER, TOP_END),
+            listOf(CENTER_START, CENTER, CENTER_END),
+            listOf(BOTTOM_START, BOTTOM_CENTER, BOTTOM_END)
+        )
+    }
 }
 
 sealed class VisualProperties {

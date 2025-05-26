@@ -5,10 +5,14 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Box
 import androidx.tv.material3.Text
+import androidx.tv.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -22,9 +26,8 @@ import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Button
-import com.antiglitch.yetanothernotifier.ui.theme.YetAnotherNotifierTheme
 import com.antiglitch.yetanothernotifier.ui.properties.VisualPropertiesRepository
-import com.antiglitch.yetanothernotifier.ui.components.NotificationDialog
+import com.antiglitch.yetanothernotifier.ui.components.NotificationCard
 import com.antiglitch.yetanothernotifier.ui.fragments.NotificationPropertiesFragment
 
 class MainActivity : ComponentActivity() {
@@ -32,13 +35,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            YetAnotherNotifierTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    shape = RectangleShape
-                ) {
-                    NotificationDemo()
-                }
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                shape = RectangleShape
+            ) {
+                NotificationDemo()
             }
         }
     }
@@ -49,16 +50,45 @@ class MainActivity : ComponentActivity() {
 fun NotificationDemo() {
     val repository = VisualPropertiesRepository.getInstance()
     val notificationProperties by repository.notificationProperties.collectAsState()
-    var showDialog by remember { mutableStateOf(false) }
-    var showPropertiesFragment by remember { mutableStateOf(false) }
+    var showControls by remember { mutableStateOf(false) }
     
-    if (showPropertiesFragment) {
-        NotificationPropertiesFragment(
-            onBack = { showPropertiesFragment = false }
-        )
+    if (showControls) {
+        Row(modifier = Modifier.fillMaxSize()) {
+            // Properties Panel (Left Side)
+            NotificationPropertiesFragment(
+                modifier = Modifier.weight(0.4f)
+            )
+            
+            Spacer(modifier = Modifier.width(16.dp))
+            
+            // Notification Preview Area (Right Side)
+            Box(modifier = Modifier.weight(0.6f)) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "Live Preview",
+                        style = MaterialTheme.typography.headlineMedium
+                    )
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    Button(onClick = { showControls = false }) {
+                        Text("Back to Demo")
+                    }
+                }
+                
+                // Show notification card in the preview area (non-blocking)
+                NotificationCard()
+            }
+        }
     } else {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(text = "Notification Properties Demo")
+            Text(
+                text = "Notification Properties Demo",
+                style = MaterialTheme.typography.headlineLarge
+            )
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
             Text(text = "Duration: ${notificationProperties.duration}ms")
             Text(text = "Scale: ${notificationProperties.scale}")
             Text(text = "Aspect: ${notificationProperties.aspect}")
@@ -69,20 +99,8 @@ fun NotificationDemo() {
             
             Spacer(modifier = Modifier.height(16.dp))
             
-            Button(onClick = { showDialog = true }) {
-                Text("Show Notification Dialog")
-            }
-            
-            Spacer(modifier = Modifier.height(8.dp))
-            
-            Button(onClick = { showPropertiesFragment = true }) {
-                Text("Edit Properties")
-            }
-            
-            if (showDialog) {
-                NotificationDialog(
-                    onDismiss = { showDialog = false }
-                )
+            Button(onClick = { showControls = true }) {
+                Text("Open Live Editor")
             }
         }
     }
@@ -99,7 +117,5 @@ fun Greeting(name: String, modifier: Modifier = Modifier) {
 @Preview(showBackground = true)
 @Composable
 fun GreetingPreview() {
-    YetAnotherNotifierTheme {
-        NotificationDemo()
-    }
+    NotificationDemo()
 }

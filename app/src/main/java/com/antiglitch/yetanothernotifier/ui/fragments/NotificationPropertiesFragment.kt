@@ -11,46 +11,37 @@ import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import androidx.tv.material3.Button
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Card
+import androidx.tv.material3.CardDefaults
 import com.antiglitch.yetanothernotifier.ui.properties.*
 
 @OptIn(ExperimentalTvMaterial3Api::class, ExperimentalMaterial3Api::class)
 @Composable
 fun NotificationPropertiesFragment(
-    onBack: () -> Unit
+    modifier: Modifier = Modifier
 ) {
     val repository = VisualPropertiesRepository.getInstance()
     val properties by repository.notificationProperties.collectAsState()
     
     Column(
-        modifier = Modifier
-            .fillMaxSize()
+        modifier = modifier
+            .fillMaxHeight()
             .padding(16.dp)
             .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // Header
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Notification Properties",
-                style = MaterialTheme.typography.headlineMedium
-            )
-            Button(onClick = onBack) {
-                Text("Back")
-            }
-        }
-        
-        Divider()
+        Text(
+            text = "Properties",
+            style = MaterialTheme.typography.headlineMedium
+        )
         
         // Duration Control
         Card(
             modifier = Modifier.fillMaxWidth(),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
+            Column(modifier = Modifier.padding(12.dp)) {
                 Text(
                     text = "Duration: ${properties.duration}ms",
                     style = MaterialTheme.typography.titleMedium
@@ -67,9 +58,8 @@ fun NotificationPropertiesFragment(
         // Scale Control
         Card(
             modifier = Modifier.fillMaxWidth(),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
+            Column(modifier = Modifier.padding(12.dp)) {
                 Text(
                     text = "Scale: ${String.format("%.2f", properties.scale)}",
                     style = MaterialTheme.typography.titleMedium
@@ -86,21 +76,20 @@ fun NotificationPropertiesFragment(
         // Aspect Ratio Control
         Card(
             modifier = Modifier.fillMaxWidth(),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
+            Column(modifier = Modifier.padding(12.dp)) {
                 Text(
-                    text = "Aspect Ratio: ${properties.aspect}",
+                    text = "Aspect: ${properties.aspect.displayName}",
                     style = MaterialTheme.typography.titleMedium
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     AspectRatio.values().forEach { aspect ->
                         FilterChip(
                             onClick = { repository.updateNotificationAspect(aspect) },
-                            label = { Text(aspect.name) },
+                            label = { Text(aspect.displayName, style = MaterialTheme.typography.labelSmall) },
                             selected = properties.aspect == aspect,
                             modifier = Modifier.weight(1f)
                         )
@@ -112,16 +101,14 @@ fun NotificationPropertiesFragment(
         // Size Controls
         Card(
             modifier = Modifier.fillMaxWidth(),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
+            Column(modifier = Modifier.padding(12.dp)) {
                 Text(
                     text = "Size",
                     style = MaterialTheme.typography.titleMedium
                 )
                 
-                // Width
-                Text(text = "Width: ${properties.width}")
+                Text(text = "W: ${properties.width}", style = MaterialTheme.typography.bodySmall)
                 Slider(
                     value = properties.width.value,
                     onValueChange = { 
@@ -131,8 +118,7 @@ fun NotificationPropertiesFragment(
                     steps = 39
                 )
                 
-                // Height
-                Text(text = "Height: ${properties.height}")
+                Text(text = "H: ${properties.height}", style = MaterialTheme.typography.bodySmall)
                 Slider(
                     value = properties.height.value,
                     onValueChange = { 
@@ -147,39 +133,34 @@ fun NotificationPropertiesFragment(
         // Gravity Control
         Card(
             modifier = Modifier.fillMaxWidth(),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
+            Column(modifier = Modifier.padding(12.dp)) {
                 Text(
-                    text = "Gravity: ${properties.gravity}",
+                    text = "Gravity: ${properties.gravity.displayName}",
                     style = MaterialTheme.typography.titleMedium
                 )
                 
-                // Create a 3x3 grid for gravity options
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    val gravityRows = listOf(
-                        listOf(Gravity.TOP_START, Gravity.TOP_CENTER, Gravity.TOP_END),
-                        listOf(Gravity.CENTER_START, Gravity.CENTER, Gravity.CENTER_END),
-                        listOf(Gravity.BOTTOM_START, Gravity.BOTTOM_CENTER, Gravity.BOTTOM_END)
-                    )
-                    
-                    gravityRows.forEach { row ->
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Gravity.gravityGrid.forEach { row ->
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(2.dp)
                         ) {
                             row.forEach { gravity ->
-                                FilterChip(
-                                    onClick = { repository.updateNotificationGravity(gravity) },
-                                    label = { 
-                                        Text(
-                                            text = gravity.name.replace("_", " "),
-                                            style = MaterialTheme.typography.labelSmall
-                                        )
-                                    },
-                                    selected = properties.gravity == gravity,
-                                    modifier = Modifier.weight(1f)
-                                )
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    RadioButton(
+                                        selected = properties.gravity == gravity,
+                                        onClick = { repository.updateNotificationGravity(gravity) }
+                                    )
+                                    Text(
+                                        text = gravity.displayName.replace(" ", "\n"),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        modifier = Modifier.padding(start = 2.dp)
+                                    )
+                                }
                             }
                         }
                     }
@@ -190,16 +171,15 @@ fun NotificationPropertiesFragment(
         // Corner Controls
         Card(
             modifier = Modifier.fillMaxWidth(),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
+            Column(modifier = Modifier.padding(12.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Rounded Corners",
+                        text = "Rounded",
                         style = MaterialTheme.typography.titleMedium
                     )
                     Switch(
@@ -209,8 +189,7 @@ fun NotificationPropertiesFragment(
                 }
                 
                 if (properties.roundedCorners) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(text = "Corner Radius: ${properties.cornerRadius}")
+                    Text(text = "Radius: ${properties.cornerRadius}", style = MaterialTheme.typography.bodySmall)
                     Slider(
                         value = properties.cornerRadius.value,
                         onValueChange = { repository.updateCornerRadius(it.dp) },

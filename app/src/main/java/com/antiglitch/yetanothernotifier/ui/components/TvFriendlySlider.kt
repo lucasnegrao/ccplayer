@@ -126,17 +126,26 @@ fun TvFriendlySlider(
         // Handle components are children of OuterBox, sibling to InnerBox (track)
         // This prevents them from being clipped by InnerBox's height/clip.
         if (trackWidthPx > 0) {
-            // Recalculate handleLeftEdge based on trackWidthPx if not already available
-            // or ensure it's correctly scoped. For this change, assume it's available.
+            // Calculate the target left edge for the 32.dp handle
             val adjustedTrackWidth = maxOf(trackWidthPx, handleSizePx.toInt())
             val maxOffset = maxOf(0, adjustedTrackWidth - handleSizePx.toInt())
-            val handleLeftEdge = (progress * maxOffset).roundToInt()
+            val handleTargetLeftEdgePx = (progress * maxOffset).roundToInt()
+
+            // Calculate the offset needed for the handle within its larger container (for the glow)
+            // handleSizePx is the 32.dp handle, handleContainerSizeForGlowPx is the 48.dp container
+            val handleContainerSizeForGlowPx = with(LocalDensity.current) { 48.dp.toPx() }
+            // This is the space on one side of the handle inside its container, e.g., 8.dp.toPx()
+            val handleVisualCenteringOffsetPx = (handleContainerSizeForGlowPx - handleSizePx) / 2f
 
             // HANDLE CONTAINER: Position is calculated independent of focus state
             Box(
                 modifier = Modifier
                     .offset {
-                        IntOffset(handleLeftEdge, 0)
+                        IntOffset(
+                            // Adjust the container's offset so the 32.dp handle inside it aligns correctly
+                            (handleTargetLeftEdgePx - handleVisualCenteringOffsetPx).roundToInt(),
+                            0
+                        )
                     }
                     .size(48.dp) // Ensure the container size is fixed and large enough for the glow
                     .align(Alignment.CenterStart) // Align with the InnerBox (track) vertically

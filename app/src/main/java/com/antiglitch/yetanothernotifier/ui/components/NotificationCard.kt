@@ -34,8 +34,7 @@ fun NotificationCard(
                 .size(
                     width = properties.width,
                     height = properties.height
-                )
-            ,
+                ),
             shape = CardDefaults.shape(
                 shape = if (properties.roundedCorners) {
                     RoundedCornerShape(properties.cornerRadius)

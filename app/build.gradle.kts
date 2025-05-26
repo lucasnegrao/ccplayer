@@ -61,6 +61,7 @@ dependencies {
 
     // Kotlin Reflection for dynamic property updates
     implementation("org.jetbrains.kotlin:kotlin-reflect:1.9.22")
+    implementation(libs.androidx.lifecycle.service)
 
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.ui.test.junit4)

@@ -16,8 +16,8 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
+import androidx.tv.material3.Button
+import androidx.tv.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -68,6 +68,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+
     }
 
     override fun onResume() {
@@ -97,12 +98,12 @@ fun NotificationPropertiesScreen() {
     Box(
         modifier = Modifier.fillMaxSize()
     ) {
-
-        NotificationCard(
-            modifier = Modifier
-                .align(getAlignmentForGravity(gravity))
-                .padding(margin) // Use margin directly
-        )
+         NotificationOverlayService.startService(LocalContext.current)
+        // NotificationCard(
+        //     modifier = Modifier
+        //         .align(getAlignmentForGravity(gravity))
+        //         .padding(margin) // Use margin directly
+        // )
 
         // Properties panel on the opposite side, less than half screen
         NotificationPropertiesFragment(
@@ -121,5 +122,15 @@ fun NotificationPropertiesScreen() {
                 )
                 .padding(8.dp)
         )
+        
+        // Add button to start overlay service
+        Button(
+            onClick = { NotificationOverlayService.startService(context) },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 16.dp)
+        ) {
+            Text("Show Persistent Notification")
+        }
     }
 }

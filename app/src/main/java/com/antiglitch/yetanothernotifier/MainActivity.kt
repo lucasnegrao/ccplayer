@@ -5,6 +5,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -41,6 +42,7 @@ import com.antiglitch.yetanothernotifier.ui.properties.Orientation
 import androidx.compose.ui.platform.LocalContext
 import com.antiglitch.yetanothernotifier.ui.fragments.OverlayPermissionWarningFragment
 import com.antiglitch.yetanothernotifier.ui.theme.YetAnotherNotifierTheme
+import androidx.core.view.WindowCompat
 
 class MainActivity : ComponentActivity() {
     // Create a state holder for the permission status that can be updated
@@ -58,17 +60,11 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             YetAnotherNotifierTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    shape = RectangleShape
-                ) {
-                    // Use the class-level state
-                    if (hasOverlayPermission.value) {
-                        NotificationPropertiesScreen(
-                        )
-                    } else {
-                        OverlayPermissionWarningFragment()
-                    }
+                // Use the class-level state
+                if (hasOverlayPermission.value) {
+                    NotificationPropertiesScreen()
+                } else {
+                    OverlayPermissionWarningFragment()
                 }
             }
         }
@@ -99,9 +95,7 @@ fun NotificationPropertiesScreen() {
     val margin = notificationProperties.margin
 
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Transparent)
+        modifier = Modifier.fillMaxSize()
     ) {
 
         NotificationCard(

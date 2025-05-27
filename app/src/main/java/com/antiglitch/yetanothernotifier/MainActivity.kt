@@ -195,26 +195,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun initializeScreenDimensions() {
-        val windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        val realMetrics = android.util.DisplayMetrics()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
-            windowManager.defaultDisplay.getRealMetrics(realMetrics)
-        } else {
-            windowManager.defaultDisplay.getMetrics(realMetrics)
-        }
-
-        screenWidthPx = realMetrics.widthPixels.toFloat()
-        screenHeightPx = realMetrics.heightPixels.toFloat()
-        screenDensity = realMetrics.density
-        
-        val screenWidthInDp = screenWidthPx / screenDensity
-        val screenHeightInDp = screenHeightPx / screenDensity
-        
-        // Use the correct method name
-        val repository = NotificationVisualPropertiesRepository.getInstance(applicationContext)
-        repository.updateScreenDimensions(screenWidthInDp, screenHeightInDp)
-    }
 
     override fun onResume() {
         super.onResume()

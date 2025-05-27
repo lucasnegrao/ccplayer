@@ -1,8 +1,14 @@
-package com.antiglitch.yetanothernotifier.network
+package com.antiglitch.yetanothernotifier.services
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
+import android.os.Build
+import android.os.Process
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -99,13 +105,6 @@ class MdnsDiscoveryService private constructor(
                     return@launch
                 }
 
-//                // Check for necessary permissions
-//                if (!checkPermissions()) {
-//                    _discoveryState.value = DiscoveryState.Error("Missing required permissions. Check INTERNET and FINE_LOCATION permissions.")
-//                    Log.e(TAG, "Cannot start discovery - Missing permissions")
-//                    return@launch
-//                }
-
                 _discoveryState.value = DiscoveryState.Scanning
                 discoveredServices.clear()
 
@@ -145,35 +144,6 @@ class MdnsDiscoveryService private constructor(
         }
     }
 
-    // Check for necessary permissions
-    private fun checkPermissions(): Boolean {
-        // Internet permission is the minimum requirement
-        val hasInternetPermission = context.checkPermission(
-            android.Manifest.permission.INTERNET,
-            android.os.Process.myPid(),
-            android.os.Process.myUid()
-        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-
-        Log.d(TAG, "Internet permission check: $hasInternetPermission")
-
-        // On newer Android versions, fine location may be needed for local network discovery
-        val locationPermissionNeeded =
-            android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q
-        val hasLocationPermission = if (locationPermissionNeeded) {
-            val result = context.checkPermission(
-                android.Manifest.permission.ACCESS_FINE_LOCATION,
-                android.os.Process.myPid(),
-                android.os.Process.myUid()
-            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-
-            Log.d(TAG, "Location permission check: $result")
-            result
-        } else {
-            true
-        }
-
-        return hasInternetPermission && (!locationPermissionNeeded || hasLocationPermission)
-    }
 
     // Debugging method to help diagnose network and discovery issues
     fun runDiagnostics() {
@@ -182,16 +152,16 @@ class MdnsDiscoveryService private constructor(
 
             // Check permissions
             val hasInternet = context.checkPermission(
-                android.Manifest.permission.INTERNET,
-                android.os.Process.myPid(),
-                android.os.Process.myUid()
-            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                Manifest.permission.INTERNET,
+                Process.myPid(),
+                Process.myUid()
+            ) == PackageManager.PERMISSION_GRANTED
 
             val hasLocation = context.checkPermission(
-                android.Manifest.permission.ACCESS_FINE_LOCATION,
-                android.os.Process.myPid(),
-                android.os.Process.myUid()
-            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Process.myPid(),
+                Process.myUid()
+            ) == PackageManager.PERMISSION_GRANTED
 
             Log.d(TAG, "Permissions: INTERNET=$hasInternet, LOCATION=$hasLocation")
 
@@ -200,14 +170,14 @@ class MdnsDiscoveryService private constructor(
 
             // Check network state if we have the permission
             if (context.checkPermission(
-                    android.Manifest.permission.ACCESS_NETWORK_STATE,
-                    android.os.Process.myPid(),
-                    android.os.Process.myUid()
-                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                    Manifest.permission.ACCESS_NETWORK_STATE,
+                    Process.myPid(),
+                    Process.myUid()
+                ) == PackageManager.PERMISSION_GRANTED
             ) {
 
                 val connectivityManager =
-                    context.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+                    context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
                 val activeNetwork = connectivityManager?.activeNetwork
                 val capabilities =
                     activeNetwork?.let { connectivityManager.getNetworkCapabilities(it) }
@@ -217,7 +187,7 @@ class MdnsDiscoveryService private constructor(
 
                 // Check if we're on WiFi
                 val isWifi =
-                    capabilities?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) == true
+                    capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
                 Log.d(TAG, "On WiFi network: $isWifi")
             }
 

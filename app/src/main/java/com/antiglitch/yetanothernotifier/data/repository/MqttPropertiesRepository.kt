@@ -1,9 +1,11 @@
-package com.antiglitch.yetanothernotifier.ui.properties
+package com.antiglitch.yetanothernotifier.data.repository
 
 import android.content.Context
 import com.antiglitch.yetanothernotifier.data.datastore.PreferencesDataStoreImpl
 import com.antiglitch.yetanothernotifier.data.datastore.preferencesDataStore
-import com.antiglitch.yetanothernotifier.data.repository.BasePropertiesRepository
+import com.antiglitch.yetanothernotifier.data.properties.EncryptionType
+import com.antiglitch.yetanothernotifier.data.properties.MqttProperties
+import com.antiglitch.yetanothernotifier.data.properties.QosLevel
 
 class MqttPropertiesRepository private constructor(
     context: Context
@@ -28,14 +30,14 @@ class MqttPropertiesRepository private constructor(
     }
 
     fun updateServerPort(port: Int) {
-        val validPort = MqttProperties.validatePort(port)
+        val validPort = MqttProperties.Companion.validatePort(port)
         updateProperty(MqttProperties::serverPort, validPort) {
             copy(serverPort = it)
         }
     }
 
     fun updateClientId(clientId: String) {
-        val validClientId = MqttProperties.validateClientId(clientId)
+        val validClientId = MqttProperties.Companion.validateClientId(clientId)
         updateProperty(MqttProperties::clientId, validClientId) {
             copy(clientId = it)
         }
@@ -54,14 +56,14 @@ class MqttPropertiesRepository private constructor(
     }
 
     fun updateSubscribeTopic(topic: String) {
-        val validTopic = MqttProperties.validateTopic(topic)
+        val validTopic = MqttProperties.Companion.validateTopic(topic)
         updateProperty(MqttProperties::subscribeTopic, validTopic) {
             copy(subscribeTopic = it)
         }
     }
 
     fun updatePublishTopic(topic: String) {
-        val validTopic = MqttProperties.validateTopic(topic)
+        val validTopic = MqttProperties.Companion.validateTopic(topic)
         updateProperty(MqttProperties::publishTopic, validTopic) {
             copy(publishTopic = it)
         }
@@ -80,14 +82,14 @@ class MqttPropertiesRepository private constructor(
     }
 
     fun updateKeepAlive(keepAlive: Int) {
-        val validKeepAlive = MqttProperties.validateKeepAlive(keepAlive)
+        val validKeepAlive = MqttProperties.Companion.validateKeepAlive(keepAlive)
         updateProperty(MqttProperties::keepAlive, validKeepAlive) {
             copy(keepAlive = it)
         }
     }
 
     fun updateConnectionTimeout(timeout: Int) {
-        val validTimeout = MqttProperties.validateConnectionTimeout(timeout)
+        val validTimeout = MqttProperties.Companion.validateConnectionTimeout(timeout)
         updateProperty(MqttProperties::connectionTimeout, validTimeout) {
             copy(connectionTimeout = it)
         }

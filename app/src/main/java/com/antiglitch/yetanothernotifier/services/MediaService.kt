@@ -1,4 +1,4 @@
-package com.antiglitch.yetanothernotifier.service
+package com.antiglitch.yetanothernotifier.services
 
 import android.support.v4.media.session.MediaSessionCompat
 import android.util.Log
@@ -8,6 +8,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import androidx.media3.session.SessionToken
+import com.antiglitch.yetanothernotifier.utils.CustomMediaSessionConnector
 
 class MediaService : MediaSessionService() {
 

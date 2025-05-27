@@ -1,4 +1,4 @@
-package com.antiglitch.yetanothernotifier.service
+package com.antiglitch.yetanothernotifier.services
 
 import android.content.ComponentName
 import android.content.Context
@@ -10,6 +10,8 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.SessionToken
+import com.antiglitch.yetanothernotifier.utils.StreamType
+import com.antiglitch.yetanothernotifier.utils.StreamTypeDetector
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import kotlinx.coroutines.CoroutineScope

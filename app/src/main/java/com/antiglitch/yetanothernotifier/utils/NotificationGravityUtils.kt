@@ -1,9 +1,10 @@
-package com.antiglitch.yetanothernotifier.ui.properties
+package com.antiglitch.yetanothernotifier.utils
 
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
+import com.antiglitch.yetanothernotifier.data.properties.Gravity
 
 enum class Orientation { Horizontal, Vertical }
 

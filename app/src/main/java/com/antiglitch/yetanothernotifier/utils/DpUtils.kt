@@ -1,4 +1,4 @@
-package com.antiglitch.yetanothernotifier.ui.properties
+package com.antiglitch.yetanothernotifier.utils
 
 import android.content.Context
 import android.util.TypedValue

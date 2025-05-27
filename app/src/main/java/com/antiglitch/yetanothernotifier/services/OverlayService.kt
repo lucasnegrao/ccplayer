@@ -27,19 +27,19 @@ import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
-import com.antiglitch.yetanothernotifier.service.MediaControllerCallback
+import com.antiglitch.yetanothernotifier.services.MediaControllerCallback
 import com.antiglitch.yetanothernotifier.ui.components.NotificationCard
-import com.antiglitch.yetanothernotifier.ui.properties.NotificationVisualProperties
-import com.antiglitch.yetanothernotifier.ui.properties.NotificationVisualPropertiesRepository
-import com.antiglitch.yetanothernotifier.ui.properties.toAndroidGravity
-import com.antiglitch.yetanothernotifier.ui.properties.toPx
+import com.antiglitch.yetanothernotifier.data.properties.NotificationVisualProperties
+import com.antiglitch.yetanothernotifier.data.repository.NotificationVisualPropertiesRepository
+import com.antiglitch.yetanothernotifier.utils.toAndroidGravity
+import com.antiglitch.yetanothernotifier.utils.toPx
 import com.antiglitch.yetanothernotifier.ui.theme.YetAnotherNotifierTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
-import com.antiglitch.yetanothernotifier.service.MediaController as CustomMediaController
+import com.antiglitch.yetanothernotifier.services.MediaController as CustomMediaController
 
-class NotificationOverlayService : LifecycleService() {
+class OverlayService : LifecycleService() {
     private lateinit var windowManager: WindowManager
     private var overlayView: ComposeView? = null
     private lateinit var savedStateRegistryOwner: ServiceSavedStateRegistryOwner
@@ -54,7 +54,7 @@ class NotificationOverlayService : LifecycleService() {
             MutableStateFlow<androidx.media3.session.MediaController?>(null) // StateFlow for the player
 
         fun startService(context: Context) {
-            val intent = Intent(context, NotificationOverlayService::class.java)
+            val intent = Intent(context, OverlayService::class.java)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
             } else {
@@ -63,7 +63,7 @@ class NotificationOverlayService : LifecycleService() {
         }
 
         fun stopService(context: Context) {
-            val intent = Intent(context, NotificationOverlayService::class.java)
+            val intent = Intent(context, OverlayService::class.java)
             context.stopService(intent)
         }
     }
@@ -84,8 +84,8 @@ class NotificationOverlayService : LifecycleService() {
                 val repository =
                     NotificationVisualPropertiesRepository.getInstance(applicationContext)
 
-                val composeView = ComposeView(this@NotificationOverlayService).apply {
-                    setViewTreeLifecycleOwner(this@NotificationOverlayService)
+                val composeView = ComposeView(this@OverlayService).apply {
+                    setViewTreeLifecycleOwner(this@OverlayService)
                     setViewTreeViewModelStoreOwner(object : ViewModelStoreOwner {
                         override val viewModelStore: ViewModelStore = ViewModelStore()
                     })
@@ -98,7 +98,7 @@ class NotificationOverlayService : LifecycleService() {
                         }
                     }
                 }
-                this@NotificationOverlayService.overlayView = composeView
+                this@OverlayService.overlayView = composeView
 
                 val params = WindowManager.LayoutParams(
                     WindowManager.LayoutParams.WRAP_CONTENT,
@@ -120,7 +120,7 @@ class NotificationOverlayService : LifecycleService() {
                     currentProps to appIsCurrentlyInForeground
                 }.collect { (activeVisualProperties, appIsCurrentlyForeground) ->
                     val currentOverlayViewNonNull =
-                        this@NotificationOverlayService.overlayView ?: return@collect
+                        this@OverlayService.overlayView ?: return@collect
 
                     params.apply {
                         width = activeVisualProperties.width.toPx(applicationContext)

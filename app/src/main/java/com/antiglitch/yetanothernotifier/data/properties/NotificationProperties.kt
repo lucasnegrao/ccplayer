@@ -1,8 +1,13 @@
-package com.antiglitch.yetanothernotifier.ui.properties
+package com.antiglitch.yetanothernotifier.data.properties
 
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
 
 // Ranges for numeric properties
 object PropertyRanges {
@@ -147,16 +152,16 @@ enum class Gravity(val displayName: String) {
 
 // Custom serializer for Dp
 @Serializable
-private class DpSerializer : kotlinx.serialization.KSerializer<Dp> {
-    override val descriptor = kotlinx.serialization.descriptors.PrimitiveSerialDescriptor(
+private class DpSerializer : KSerializer<Dp> {
+    override val descriptor = PrimitiveSerialDescriptor(
         "Dp",
-        kotlinx.serialization.descriptors.PrimitiveKind.FLOAT
+        PrimitiveKind.FLOAT
     )
 
-    override fun serialize(encoder: kotlinx.serialization.encoding.Encoder, value: Dp) =
+    override fun serialize(encoder: Encoder, value: Dp) =
         encoder.encodeFloat(value.value)
 
-    override fun deserialize(decoder: kotlinx.serialization.encoding.Decoder): Dp =
+    override fun deserialize(decoder: Decoder): Dp =
         decoder.decodeFloat().dp
 }
 

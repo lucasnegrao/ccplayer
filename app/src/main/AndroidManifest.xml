@@ -42,11 +42,11 @@
 
         <!-- Add the service declaration -->
         <service
-            android:name=".NotificationOverlayService"
+            android:name=".OverlayService"
             android:enabled="true"
             android:exported="false" />
         <service
-            android:name=".service.MediaService"
+            android:name=".services.MediaService"
             android:exported="true"
             android:foregroundServiceType="mediaPlayback">
             <intent-filter>

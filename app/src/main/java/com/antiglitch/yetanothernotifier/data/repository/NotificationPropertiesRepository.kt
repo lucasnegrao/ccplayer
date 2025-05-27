@@ -1,10 +1,13 @@
-package com.antiglitch.yetanothernotifier.ui.properties
+package com.antiglitch.yetanothernotifier.data.repository
 
 import android.content.Context
+import android.util.Log
 import androidx.compose.ui.unit.Dp
 import com.antiglitch.yetanothernotifier.data.datastore.PreferencesDataStoreImpl
 import com.antiglitch.yetanothernotifier.data.datastore.preferencesDataStore
-import com.antiglitch.yetanothernotifier.data.repository.BasePropertiesRepository
+import com.antiglitch.yetanothernotifier.data.properties.AspectRatio
+import com.antiglitch.yetanothernotifier.data.properties.Gravity
+import com.antiglitch.yetanothernotifier.data.properties.NotificationVisualProperties
 
 class NotificationVisualPropertiesRepository private constructor(
     context: Context
@@ -16,21 +19,21 @@ class NotificationVisualPropertiesRepository private constructor(
 
     // Dynamic property updaters using reflection
     fun updateDuration(duration: Long) {
-        val validDuration = NotificationVisualProperties.validateDuration(duration)
+        val validDuration = NotificationVisualProperties.Companion.validateDuration(duration)
         updateProperty(NotificationVisualProperties::duration, validDuration) {
             copy(duration = it)
         }
     }
 
     fun updateMargin(margin: Dp) {
-        val validMargin = NotificationVisualProperties.validateMargin(margin)
+        val validMargin = NotificationVisualProperties.Companion.validateMargin(margin)
         updateProperty(NotificationVisualProperties::margin, validMargin) {
             copy(margin = it)
         }
     }
 
     fun updateScale(scale: Float) {
-        val validScale = NotificationVisualProperties.validateScale(scale)
+        val validScale = NotificationVisualProperties.Companion.validateScale(scale)
         updateProperty(NotificationVisualProperties::scale, validScale) {
             copy(scale = it)
         }
@@ -55,14 +58,14 @@ class NotificationVisualPropertiesRepository private constructor(
     }
 
     fun updateCornerRadius(radius: Dp) {
-        val validRadius = NotificationVisualProperties.validateCornerRadius(radius)
+        val validRadius = NotificationVisualProperties.Companion.validateCornerRadius(radius)
         updateProperty(NotificationVisualProperties::cornerRadius, validRadius) {
             copy(cornerRadius = it)
         }
     }
 
     fun updateTransparency(transparency: Float) {
-        val validTransparency = NotificationVisualProperties.validateTransparency(transparency)
+        val validTransparency = NotificationVisualProperties.Companion.validateTransparency(transparency)
         updateProperty(NotificationVisualProperties::transparency, validTransparency) {
             copy(transparency = it)
         }
@@ -70,7 +73,7 @@ class NotificationVisualPropertiesRepository private constructor(
 
     fun updateScreenDimensions(screenWidthDp: Float, screenHeightDp: Float) {
         val currentProperties = properties.value
-        android.util.Log.d(
+        Log.d(
             "NotificationVisualPropertiesRepository",
             "Updating screen dimensions from ${currentProperties.screenWidthDp}x${currentProperties.screenHeightDp} to ${screenWidthDp}x${screenHeightDp}"
         )

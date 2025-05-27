@@ -1,4 +1,4 @@
-package com.antiglitch.yetanothernotifier.ui.properties
+package com.antiglitch.yetanothernotifier.data.properties
 
 import kotlinx.serialization.Serializable
 

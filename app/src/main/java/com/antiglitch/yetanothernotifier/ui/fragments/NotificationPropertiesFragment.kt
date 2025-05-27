@@ -38,10 +38,10 @@ import androidx.tv.material3.Text
 import com.antiglitch.yetanothernotifier.ui.components.TvFriendlyChipsSelect
 import com.antiglitch.yetanothernotifier.ui.components.TvFriendlySlider
 import com.antiglitch.yetanothernotifier.ui.components.TvFriendlySwitch
-import com.antiglitch.yetanothernotifier.ui.properties.AspectRatio
-import com.antiglitch.yetanothernotifier.ui.properties.Gravity
-import com.antiglitch.yetanothernotifier.ui.properties.NotificationVisualPropertiesRepository
-import com.antiglitch.yetanothernotifier.ui.properties.PropertyRanges
+import com.antiglitch.yetanothernotifier.data.properties.AspectRatio
+import com.antiglitch.yetanothernotifier.data.properties.Gravity
+import com.antiglitch.yetanothernotifier.data.repository.NotificationVisualPropertiesRepository
+import com.antiglitch.yetanothernotifier.data.properties.PropertyRanges
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable

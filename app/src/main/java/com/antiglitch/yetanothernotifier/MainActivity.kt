@@ -1,6 +1,5 @@
 package com.antiglitch.yetanothernotifier
 
-import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.Gravity
@@ -37,32 +36,34 @@ import com.antiglitch.yetanothernotifier.ui.components.NotificationCard
 import com.antiglitch.yetanothernotifier.ui.components.PermissionDialog
 import com.antiglitch.yetanothernotifier.ui.navigation.SettingsNavigation
 import com.antiglitch.yetanothernotifier.ui.navigation.SettingsScreen
-import com.antiglitch.yetanothernotifier.ui.properties.MqttDiscoveryRepository
-import com.antiglitch.yetanothernotifier.ui.properties.NotificationVisualPropertiesRepository
-import com.antiglitch.yetanothernotifier.ui.properties.Orientation
-import com.antiglitch.yetanothernotifier.ui.properties.getAlignmentForGravity
-import com.antiglitch.yetanothernotifier.ui.properties.getOppositeAlignment
-import com.antiglitch.yetanothernotifier.ui.properties.getOppositeOrientation
-import com.antiglitch.yetanothernotifier.ui.properties.toAndroidGravity
+import com.antiglitch.yetanothernotifier.data.repository.MqttDiscoveryRepository
+import com.antiglitch.yetanothernotifier.data.repository.NotificationVisualPropertiesRepository
+import com.antiglitch.yetanothernotifier.utils.Orientation
+import com.antiglitch.yetanothernotifier.utils.getAlignmentForGravity
+import com.antiglitch.yetanothernotifier.utils.getOppositeAlignment
+import com.antiglitch.yetanothernotifier.utils.getOppositeOrientation
+import com.antiglitch.yetanothernotifier.utils.toAndroidGravity
 import com.antiglitch.yetanothernotifier.ui.theme.YetAnotherNotifierTheme
+import com.antiglitch.yetanothernotifier.utils.PermissionType
+import com.antiglitch.yetanothernotifier.utils.PermissionUtil
 
 class MainActivity : ComponentActivity() {
     // Create state holders for permission statuses
     private val hasOverlayPermission = mutableStateOf(false)
     private val hasInternetPermission = mutableStateOf(false)
-    var screenWidthPx: Float = 0f
-    var screenHeightPx: Float = 0f
-    var screenDensity: Float = 1f
+
+    // Use ServiceOrchestrator instead of managing services directly
+    private lateinit var serviceOrchestrator: ServiceOrchestrator
 
     @OptIn(ExperimentalTvMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Initialize service orchestrator
+        serviceOrchestrator = ServiceOrchestrator.getInstance(this)
+
         // Initial check for permissions
         checkPermissions()
-
-        // Don't initialize screen dimensions immediately - do it after repository loads
-        calculateScreenDimensions()
 
         setContent {
             YetAnotherNotifierTheme {
@@ -74,14 +75,13 @@ class MainActivity : ComponentActivity() {
                 if (hasOverlayPermission.value && hasInternetPermission.value) {
                     // Both permissions granted, show the main screen
                     NotificationPropertiesScreen()
-                    // Initialize screen dimensions after UI is ready
+
+                    // Initialize services through orchestrator
                     LaunchedEffect(Unit) {
-                        initializeScreenDimensionsAfterLoad()
+                        serviceOrchestrator.initialize()
                     }
-                    // Start the service here, once, after permissions are granted and UI is ready.
-                    NotificationOverlayService.startService(this)
                 } else {
-                    // At least one permission is missing, show a placeholder screen with permission dialogs
+                    // At least one permission is missing, show permission dialogs
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -117,6 +117,8 @@ class MainActivity : ComponentActivity() {
                                     hasOverlayPermission.value = true
                                     // Once overlay is granted, show internet permission if needed
                                     showInternetPermission.value = !hasInternetPermission.value
+                                    // Reinitialize services after permission granted
+                                    serviceOrchestrator.reinitialize()
                                 },
                                 onDismiss = {
                                     // If user dismisses, keep showing the dialog
@@ -131,6 +133,8 @@ class MainActivity : ComponentActivity() {
                                 onPermissionGranted = {
                                     showInternetPermission.value = false
                                     hasInternetPermission.value = true
+                                    // Reinitialize services after permission granted
+                                    serviceOrchestrator.reinitialize()
                                 },
                                 onDismiss = {
                                     // If user dismisses, keep showing the dialog
@@ -144,90 +148,26 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun calculateScreenDimensions() {
-        val windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-        val realMetrics = android.util.DisplayMetrics()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
-            windowManager.defaultDisplay.getRealMetrics(realMetrics)
-        } else {
-            windowManager.defaultDisplay.getMetrics(realMetrics)
-        }
-
-        screenWidthPx = realMetrics.widthPixels.toFloat()
-        screenHeightPx = realMetrics.heightPixels.toFloat()
-        screenDensity = realMetrics.density
-
-        Log.d(
-            "MainActivity",
-            "Screen dimensions calculated: ${screenWidthPx}x${screenHeightPx}px, density: $screenDensity"
-        )
-    }
-
-    private suspend fun initializeScreenDimensionsAfterLoad() {
-        val screenWidthInDp = screenWidthPx / screenDensity
-        val screenHeightInDp = screenHeightPx / screenDensity
-
-        Log.d("MainActivity", "Screen dimensions in DP: ${screenWidthInDp}x${screenHeightInDp}")
-
-        val repository = NotificationVisualPropertiesRepository.getInstance(applicationContext)
-
-        // Wait for initial load to complete and only update if dimensions are different
-        val currentProperties = repository.properties.value
-        Log.d(
-            "MainActivity",
-            "Current stored dimensions: ${currentProperties.screenWidthDp}x${currentProperties.screenHeightDp}"
-        )
-
-        val tolerance = 1.0f // Allow 1dp tolerance for float comparison
-        val widthNeedsUpdate =
-            kotlin.math.abs(currentProperties.screenWidthDp - screenWidthInDp) > tolerance
-        val heightNeedsUpdate =
-            kotlin.math.abs(currentProperties.screenHeightDp - screenHeightInDp) > tolerance
-
-        if (widthNeedsUpdate || heightNeedsUpdate) {
-            Log.d("MainActivity", "Screen dimensions changed, updating repository")
-            repository.updateScreenDimensions(screenWidthInDp, screenHeightInDp)
-        } else {
-            Log.d("MainActivity", "Screen dimensions unchanged, not updating")
-        }
-    }
-
-
     override fun onResume() {
         super.onResume()
         // Re-check permissions when activity resumes (user comes back from settings)
         checkPermissions()
-        NotificationOverlayService.appForegroundState.value = true // Update StateFlow
-        Log.d(
-            "MainActivity",
-            "onResume: Overlay: ${hasOverlayPermission.value}, Internet: ${hasInternetPermission.value}, AppInForeground: ${NotificationOverlayService.appForegroundState.value}"
-        )
+        serviceOrchestrator.onAppForeground()
+        Log.d("MainActivity", "onResume: Permissions checked, orchestrator notified")
     }
 
     override fun onPause() {
         super.onPause()
-        NotificationOverlayService.appForegroundState.value = false // Update StateFlow
-        Log.d(
-            "MainActivity",
-            "onPause: AppInForeground: ${NotificationOverlayService.appForegroundState.value}"
-        )
+        serviceOrchestrator.onAppBackground()
+        Log.d("MainActivity", "onPause: Orchestrator notified")
     }
 
     override fun onDestroy() {
         super.onDestroy()
 
-        // Ensure we properly stop any services to prevent background clipboard access
-        try {
-            // Stop any ongoing discovery
-            val discoveryRepository = MqttDiscoveryRepository.getInstance(this)
-            discoveryRepository.stopDiscovery()
-
-//            // Make sure overlay service is properly stopped if needed
-//            if (NotificationOverlayService.isRunning && !isChangingConfigurations) {
-//                NotificationOverlayService.stopService(this)
-//            }
-        } catch (e: Exception) {
-            Log.e("MainActivity", "Error stopping services", e)
+        // Let orchestrator handle cleanup
+        if (!isChangingConfigurations) {
+            serviceOrchestrator.shutdown()
         }
     }
 
@@ -259,7 +199,7 @@ fun NotificationPropertiesScreen() {
 
         // If the app is in the foreground, render the NotificationCard directly
         // The service will not show its overlay if appForegroundState.value is true.
-        val isAppInForeground by NotificationOverlayService.appForegroundState.collectAsState()
+        val isAppInForeground by OverlayService.appForegroundState.collectAsState()
         if (isAppInForeground) {
             val cardAlignment = getAlignmentForGravity(gravityValue)
 

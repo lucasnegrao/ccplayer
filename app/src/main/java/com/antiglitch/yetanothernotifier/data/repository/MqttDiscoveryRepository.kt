@@ -1,15 +1,15 @@
-package com.antiglitch.yetanothernotifier.ui.properties
+package com.antiglitch.yetanothernotifier.data.repository
 
 import android.content.Context
-import com.antiglitch.yetanothernotifier.network.DiscoveryState
-import com.antiglitch.yetanothernotifier.network.MdnsDiscoveryService
-import com.antiglitch.yetanothernotifier.network.MdnsService
+import com.antiglitch.yetanothernotifier.services.DiscoveryState
+import com.antiglitch.yetanothernotifier.services.MdnsDiscoveryService
+import com.antiglitch.yetanothernotifier.services.MdnsService
 import kotlinx.coroutines.flow.StateFlow
 
 class MqttDiscoveryRepository private constructor(
     context: Context
 ) {
-    private val mdnsService = MdnsDiscoveryService.getInstance(context)
+    private val mdnsService = MdnsDiscoveryService.Companion.getInstance(context)
 
     // Expose discovery state
     val discoveryState: StateFlow<DiscoveryState> = mdnsService.discoveryState

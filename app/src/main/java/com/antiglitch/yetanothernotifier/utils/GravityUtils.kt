@@ -1,5 +1,6 @@
-package com.antiglitch.yetanothernotifier.ui.properties
+package com.antiglitch.yetanothernotifier.utils
 
+import com.antiglitch.yetanothernotifier.data.properties.Gravity
 import android.view.Gravity as AndroidGravity
 
 /**

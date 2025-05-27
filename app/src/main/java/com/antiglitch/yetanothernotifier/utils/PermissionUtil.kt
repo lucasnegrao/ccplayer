@@ -1,5 +1,6 @@
-package com.antiglitch.yetanothernotifier
+package com.antiglitch.yetanothernotifier.utils
 
+import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
@@ -7,6 +8,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -50,14 +52,14 @@ object PermissionUtil {
     private fun checkInternetPermission(context: Context): Boolean {
         return ContextCompat.checkSelfPermission(
             context,
-            android.Manifest.permission.INTERNET
+            Manifest.permission.INTERNET
         ) == PackageManager.PERMISSION_GRANTED
     }
 
     private fun checkLocationPermission(context: Context): Boolean {
         return ContextCompat.checkSelfPermission(
             context,
-            android.Manifest.permission.ACCESS_FINE_LOCATION
+            Manifest.permission.ACCESS_FINE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
     }
 
@@ -65,7 +67,7 @@ object PermissionUtil {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             ContextCompat.checkSelfPermission(
                 context,
-                android.Manifest.permission.BLUETOOTH_CONNECT
+                Manifest.permission.BLUETOOTH_CONNECT
             ) == PackageManager.PERMISSION_GRANTED
         } else {
             true
@@ -76,7 +78,7 @@ object PermissionUtil {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             ContextCompat.checkSelfPermission(
                 context,
-                android.Manifest.permission.POST_NOTIFICATIONS
+                Manifest.permission.POST_NOTIFICATIONS
             ) == PackageManager.PERMISSION_GRANTED
         } else {
             true
@@ -110,21 +112,21 @@ object PermissionUtil {
             intent.removeExtra(Intent.EXTRA_TEXT)
 
             // Log the intent for debugging
-            android.util.Log.d(
+            Log.d(
                 "PermissionUtil",
                 "Starting settings with action: ${intent.action} and data: ${intent.data}"
             )
 
             activity.startActivity(intent)
         } catch (e: Exception) {
-            android.util.Log.e("PermissionUtil", "Error navigating to settings", e)
+            Log.e("PermissionUtil", "Error navigating to settings", e)
             // Fallback to a more basic approach
             try {
                 val intent = Intent(Settings.ACTION_SETTINGS)
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 activity.startActivity(intent)
             } catch (e2: Exception) {
-                android.util.Log.e(
+                Log.e(
                     "PermissionUtil",
                     "Failed to navigate to settings with fallback",
                     e2

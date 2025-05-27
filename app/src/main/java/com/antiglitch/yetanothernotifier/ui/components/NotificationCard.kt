@@ -13,9 +13,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
-import com.antiglitch.yetanothernotifier.NotificationOverlayService
+import com.antiglitch.yetanothernotifier.OverlayService
 import com.antiglitch.yetanothernotifier.player.ExoPlayerComposable
-import com.antiglitch.yetanothernotifier.ui.properties.NotificationVisualPropertiesRepository
+import com.antiglitch.yetanothernotifier.data.repository.NotificationVisualPropertiesRepository
 
 
 @OptIn(ExperimentalTvMaterial3Api::class)
@@ -27,7 +27,7 @@ fun NotificationCard(
     val repository = NotificationVisualPropertiesRepository.getInstance(context)
     val properties by repository.properties.collectAsState()
 
-    val player by NotificationOverlayService.playerControllerState.collectAsState()
+    val player by OverlayService.playerControllerState.collectAsState()
 
     Column(
         modifier = Modifier

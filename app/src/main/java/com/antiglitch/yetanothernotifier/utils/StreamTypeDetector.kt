@@ -1,4 +1,4 @@
-package com.antiglitch.yetanothernotifier.service
+package com.antiglitch.yetanothernotifier.utils
 
 import android.content.Context
 import android.net.Uri

@@ -45,18 +45,18 @@ import androidx.tv.material3.InputChip
 import androidx.tv.material3.LocalContentColor
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
-import com.antiglitch.yetanothernotifier.PermissionType
-import com.antiglitch.yetanothernotifier.PermissionUtil
-import com.antiglitch.yetanothernotifier.network.DiscoveryState
+import com.antiglitch.yetanothernotifier.utils.PermissionType
+import com.antiglitch.yetanothernotifier.utils.PermissionUtil
+import com.antiglitch.yetanothernotifier.services.DiscoveryState
 import com.antiglitch.yetanothernotifier.ui.components.PermissionDialog
 import com.antiglitch.yetanothernotifier.ui.components.TvFriendlyChipsSelect
 import com.antiglitch.yetanothernotifier.ui.components.TvFriendlySlider
 import com.antiglitch.yetanothernotifier.ui.components.TvFriendlySwitch
-import com.antiglitch.yetanothernotifier.ui.properties.EncryptionType
-import com.antiglitch.yetanothernotifier.ui.properties.MqttDiscoveryRepository
-import com.antiglitch.yetanothernotifier.ui.properties.MqttPropertiesRepository
-import com.antiglitch.yetanothernotifier.ui.properties.MqttPropertyRanges
-import com.antiglitch.yetanothernotifier.ui.properties.QosLevel
+import com.antiglitch.yetanothernotifier.data.properties.EncryptionType
+import com.antiglitch.yetanothernotifier.data.repository.MqttDiscoveryRepository
+import com.antiglitch.yetanothernotifier.data.repository.MqttPropertiesRepository
+import com.antiglitch.yetanothernotifier.data.properties.MqttPropertyRanges
+import com.antiglitch.yetanothernotifier.data.properties.QosLevel
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable

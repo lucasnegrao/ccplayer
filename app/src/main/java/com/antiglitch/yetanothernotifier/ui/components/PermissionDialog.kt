@@ -32,8 +32,8 @@ import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.OutlinedButton
 import androidx.tv.material3.Text
-import com.antiglitch.yetanothernotifier.PermissionType
-import com.antiglitch.yetanothernotifier.PermissionUtil
+import com.antiglitch.yetanothernotifier.utils.PermissionType
+import com.antiglitch.yetanothernotifier.utils.PermissionUtil
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable

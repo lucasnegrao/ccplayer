@@ -1,8 +1,9 @@
-package com.antiglitch.yetanothernotifier.ui.properties
+package com.antiglitch.yetanothernotifier.utils
 
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.antiglitch.yetanothernotifier.data.properties.Gravity
 
 object NotificationUtils {
     // This function must be called from within a BoxScope

@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
@@ -38,11 +37,12 @@ import com.antiglitch.yetanothernotifier.ui.navigation.SettingsNavigation
 import com.antiglitch.yetanothernotifier.ui.navigation.SettingsScreen
 import com.antiglitch.yetanothernotifier.data.repository.MqttDiscoveryRepository
 import com.antiglitch.yetanothernotifier.data.repository.NotificationVisualPropertiesRepository
-import com.antiglitch.yetanothernotifier.utils.Orientation
-import com.antiglitch.yetanothernotifier.utils.getAlignmentForGravity
-import com.antiglitch.yetanothernotifier.utils.getOppositeAlignment
-import com.antiglitch.yetanothernotifier.utils.getOppositeOrientation
-import com.antiglitch.yetanothernotifier.utils.toAndroidGravity
+import com.antiglitch.yetanothernotifier.utils.NotificationUtils // Updated import
+import com.antiglitch.yetanothernotifier.utils.NotificationUtils.getAlignmentForGravity // Specific import
+import com.antiglitch.yetanothernotifier.utils.NotificationUtils.getOppositeAlignment // Specific import
+import com.antiglitch.yetanothernotifier.utils.NotificationUtils.getOppositeOrientation // Specific import
+import com.antiglitch.yetanothernotifier.utils.NotificationUtils.marginForGravity // Specific import
+import com.antiglitch.yetanothernotifier.utils.NotificationUtils.toAndroidGravity // Specific import
 import com.antiglitch.yetanothernotifier.ui.theme.YetAnotherNotifierTheme
 import com.antiglitch.yetanothernotifier.utils.PermissionType
 import com.antiglitch.yetanothernotifier.utils.PermissionUtil
@@ -201,31 +201,7 @@ fun NotificationPropertiesScreen() {
         // The service will not show its overlay if appForegroundState.value is true.
         val isAppInForeground by OverlayService.appForegroundState.collectAsState()
         if (isAppInForeground) {
-            val cardAlignment = getAlignmentForGravity(gravityValue)
-
-            val androidGravityInt = gravityValue.toAndroidGravity()
-            val isVerticalCenter =
-                (androidGravityInt and Gravity.VERTICAL_GRAVITY_MASK) == Gravity.CENTER_VERTICAL
-            val isHorizontalCenter =
-                (androidGravityInt and Gravity.HORIZONTAL_GRAVITY_MASK) == Gravity.CENTER_HORIZONTAL
-            val isStart = (androidGravityInt and Gravity.HORIZONTAL_GRAVITY_MASK) == Gravity.START
-            val isEnd = (androidGravityInt and Gravity.HORIZONTAL_GRAVITY_MASK) == Gravity.END
-            val isTop = (androidGravityInt and Gravity.VERTICAL_GRAVITY_MASK) == Gravity.TOP
-            val isBottom = (androidGravityInt and Gravity.VERTICAL_GRAVITY_MASK) == Gravity.BOTTOM
-
-            val xOffset = when {
-                isStart -> marginDp
-                isEnd -> -marginDp
-                isHorizontalCenter -> marginDp // Offset from center
-                else -> 0.dp
-            }
-
-            val yOffset = when {
-                isTop -> marginDp
-                isBottom -> -marginDp
-                isVerticalCenter -> 0.dp // No vertical offset if centered vertically
-                else -> 0.dp
-            }
+            val cardAlignment = NotificationUtils.getAlignmentForGravity(gravityValue)
 
             // Use the width and height from notificationProperties (which are Dp)
             val cardWidth = notificationProperties.width
@@ -237,7 +213,7 @@ fun NotificationPropertiesScreen() {
                 Box(
                     modifier = Modifier
                         .align(cardAlignment) // Align this box (which wraps the card)
-                        .offset(x = xOffset, y = yOffset) // Then offset it
+                        .marginForGravity(gravityValue, marginDp) // Apply offset using consolidated util
                         .width(cardWidth)  // Apply calculated width from properties
                         .height(cardHeight) // Apply calculated height from properties
                 ) {
@@ -259,16 +235,16 @@ fun NotificationPropertiesScreen() {
             },
             modifier = Modifier
                 .then(
-                    when (getOppositeOrientation(gravityValue)) {
-                        Orientation.Horizontal -> Modifier
+                    when (NotificationUtils.getOppositeOrientation(gravityValue)) {
+                        NotificationUtils.Orientation.Horizontal -> Modifier
                             .fillMaxHeight()
                             .fillMaxWidth(0.4f)
-                            .align(getOppositeAlignment(gravityValue))
+                            .align(NotificationUtils.getOppositeAlignment(gravityValue))
 
-                        Orientation.Vertical -> Modifier
+                        NotificationUtils.Orientation.Vertical -> Modifier
                             .fillMaxWidth()
                             .fillMaxHeight(0.8f)
-                            .align(getOppositeAlignment(gravityValue))
+                            .align(NotificationUtils.getOppositeAlignment(gravityValue))
                     }
                 )
                 .padding(8.dp)

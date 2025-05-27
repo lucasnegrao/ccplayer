@@ -31,7 +31,8 @@ import com.antiglitch.yetanothernotifier.services.MediaControllerCallback
 import com.antiglitch.yetanothernotifier.ui.components.NotificationCard
 import com.antiglitch.yetanothernotifier.data.properties.NotificationVisualProperties
 import com.antiglitch.yetanothernotifier.data.repository.NotificationVisualPropertiesRepository
-import com.antiglitch.yetanothernotifier.utils.toAndroidGravity
+import com.antiglitch.yetanothernotifier.utils.NotificationUtils // Updated import
+import com.antiglitch.yetanothernotifier.utils.NotificationUtils.toAndroidGravity // Specific import for the extension function
 import com.antiglitch.yetanothernotifier.utils.toPx
 import com.antiglitch.yetanothernotifier.ui.theme.YetAnotherNotifierTheme
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -125,16 +126,13 @@ class OverlayService : LifecycleService() {
                     params.apply {
                         width = activeVisualProperties.width.toPx(applicationContext)
                         height = activeVisualProperties.height.toPx(applicationContext)
-                        val androidGravityValue = activeVisualProperties.gravity.toAndroidGravity()
-                        gravity = androidGravityValue
+                        // Corrected call to the extension function
+                        gravity = activeVisualProperties.gravity.toAndroidGravity()
+                        
                         val marginPxValue = activeVisualProperties.margin.toPx(applicationContext)
-                        x = marginPxValue
-                        y =
-                            if ((androidGravityValue and android.view.Gravity.VERTICAL_GRAVITY_MASK) == android.view.Gravity.CENTER_VERTICAL) {
-                                0
-                            } else {
-                                marginPxValue
-                            }
+                        val (offsetX, offsetY) = NotificationUtils.getOffsetsForGravity(activeVisualProperties.gravity, marginPxValue)
+                        x = offsetX
+                        y = offsetY
                     }
 
                     if (!appIsCurrentlyForeground) {

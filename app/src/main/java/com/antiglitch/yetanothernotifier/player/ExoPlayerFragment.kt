@@ -22,6 +22,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.activity.enableEdgeToEdge
+import androidx.annotation.OptIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -48,6 +49,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import com.antiglitch.yetanothernotifier.player.buttons.ExtraControls
 import  com.antiglitch.yetanothernotifier.player.buttons.MinimalControls
 import  com.antiglitch.yetanothernotifier.player.data.videos
@@ -114,6 +116,7 @@ private fun initializePlayer(context: Context): Player =
     prepare()
   }
 
+@OptIn(UnstableApi::class)
 @Composable
 private fun MediaPlayerScreen(player: Player, modifier: Modifier = Modifier) {
   var showControls by remember { mutableStateOf(true) }

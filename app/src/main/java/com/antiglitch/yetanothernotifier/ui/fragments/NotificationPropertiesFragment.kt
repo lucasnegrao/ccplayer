@@ -252,5 +252,29 @@ fun NotificationPropertiesFragment(
                 formatValue = { "${it.toInt()}dp" }
             )
         }
+
+        // Transparency Control
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    shape = RoundedCornerShape(8.dp)
+                )
+                .padding(12.dp)
+        ) {
+            Text(
+                text = "Transparency: ${String.format("%.2f", properties.transparency)}",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            TvFriendlySlider(
+                value = properties.transparency,
+                onValueChange = { repository.updateTransparency(it) },
+                valueRange = PropertyRanges.TRANSPARENCY,
+                stepSize = PropertyRanges.TRANSPARENCY_STEP,
+                formatValue = { String.format("%.2f", it) }
+            )
+        }
     }
 }

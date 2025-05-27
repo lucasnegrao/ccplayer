@@ -135,10 +135,15 @@ class NotificationOverlayService : LifecycleService() {
                     WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
                     PixelFormat.TRANSLUCENT
                 ).apply {
-                    gravity = properties.gravity.toAndroidGravity()
+                    val androidGravityValue = properties.gravity.toAndroidGravity()
+                    gravity = androidGravityValue
                     val marginPx = properties.margin.toPx(applicationContext)
                     x = marginPx
-                    y = marginPx
+                    y = if ((androidGravityValue and android.view.Gravity.VERTICAL_GRAVITY_MASK) == android.view.Gravity.CENTER_VERTICAL) {
+                        0
+                    } else {
+                        marginPx
+                    }
                 }
 
                 // Add small delay to ensure theme is fully applied
@@ -156,10 +161,15 @@ class NotificationOverlayService : LifecycleService() {
                         val updatedParams = params.apply {
                             width = propertiesWithScreen.width.value.toInt()
                             height = propertiesWithScreen.height.value.toInt()
-                            gravity = updatedProperties.gravity.toAndroidGravity()
+                            val androidGravityValue = updatedProperties.gravity.toAndroidGravity()
+                            gravity = androidGravityValue
                             val marginPx = updatedProperties.margin.toPx(applicationContext)
                             x = marginPx
-                            y = marginPx
+                            y = if ((androidGravityValue and android.view.Gravity.VERTICAL_GRAVITY_MASK) == android.view.Gravity.CENTER_VERTICAL) {
+                                0
+                            } else {
+                                marginPx
+                            }
                         }
                         overlayView?.let { view ->
                             windowManager.updateViewLayout(view, updatedParams)

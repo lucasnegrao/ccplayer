@@ -40,7 +40,7 @@ fun NotificationCard(
             onInitialized = { controller, customController ->
                 mediaController = controller
                 customMediaController = customController
-                customMediaController?.loadUrl("https://www.xvideos.com/video.ohkpfhke770/priscila_araujo_fucked_her_friend_gordinho_twice_in_the_same_day")
+                customMediaController?.loadUrl("https://www.xvideos.com/video.kpmcidh5fe9/compilation_of_young_traps_pleasing_themselves_cum_and_fun")
             }
         )
     }
@@ -51,6 +51,7 @@ fun NotificationCard(
                 width = properties.width,
                 height = properties.height
             )
+            .graphicsLayer(alpha = properties.transparency) // Apply transparency here
             .background(
                 color = MaterialTheme.colorScheme.surface,
                 shape = if (properties.roundedCorners) {

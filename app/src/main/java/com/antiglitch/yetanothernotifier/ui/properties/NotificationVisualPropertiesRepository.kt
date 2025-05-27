@@ -61,6 +61,13 @@ class NotificationVisualPropertiesRepository private constructor(
         }
     }
 
+    fun updateTransparency(transparency: Float) {
+        val validTransparency = NotificationVisualProperties.validateTransparency(transparency)
+        updateProperty(NotificationVisualProperties::transparency, validTransparency) {
+            copy(transparency = it)
+        }
+    }
+
     // Batch update method
     fun updateMultipleProperties(updates: NotificationVisualProperties.() -> NotificationVisualProperties) {
         val currentProperties = properties.value

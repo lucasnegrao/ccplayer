@@ -10,11 +10,13 @@ object PropertyRanges {
     val SCALE = 0.1f..1.0f
     val CORNER_RADIUS = 0.dp..30.dp
     val MARGIN = 0.dp..64.dp // Add reasonable max margin
+    val TRANSPARENCY = 0.0f..1.0f // Range for transparency (0.0 = fully transparent, 1.0 = fully opaque)
     
     // Default step sizes for UI controls
     val DURATION_STEP = 500L
     val SCALE_STEP = 0.05f
     val CORNER_RADIUS_STEP = 2.dp
+    val TRANSPARENCY_STEP = 0.05f // Step size for transparency
 }
 
 @Serializable
@@ -28,7 +30,8 @@ data class NotificationVisualProperties(
     val gravity: Gravity = Gravity.TOP_CENTER,
     val roundedCorners: Boolean = true,
     @Serializable(with = DpSerializer::class)
-    val margin: Dp = 16.dp // <-- Add margin property with default
+    val margin: Dp = 16.dp, // <-- Add margin property with default
+    val transparency: Float = 1.0f // Transparency (0.0f to 1.0f)
 ) {
     // Screen dimensions for calculations (set by the service)
     @kotlinx.serialization.Transient
@@ -111,6 +114,9 @@ data class NotificationVisualProperties(
         
         fun validateMargin(value: Dp): Dp =
             value.coerceIn(PropertyRanges.MARGIN)
+        
+        fun validateTransparency(value: Float): Float =
+            value.coerceIn(PropertyRanges.TRANSPARENCY)
     }
 }
 

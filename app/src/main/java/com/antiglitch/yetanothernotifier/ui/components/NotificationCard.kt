@@ -16,8 +16,9 @@ import androidx.tv.material3.Text
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalContext
+import com.antiglitch.yetanothernotifier.player.ComposeDemoApp
 import com.antiglitch.yetanothernotifier.ui.properties.*
-import com.antiglitch.yetanothernotifier.ui.properties.NotificationUtils
+import com.antiglitch.yetanothernotifier.player.ExoPlayerFragment
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -43,6 +44,6 @@ fun NotificationCard(
                 }
             )
     ) {
-        // Empty column - all content removed
+        ComposeDemoApp()
     }
 }

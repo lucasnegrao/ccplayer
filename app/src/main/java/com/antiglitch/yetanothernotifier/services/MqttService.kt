@@ -5,7 +5,9 @@ import android.util.Log
 import com.antiglitch.yetanothernotifier.data.properties.MqttProperties
 import com.antiglitch.yetanothernotifier.data.repository.MqttPropertiesRepository
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import org.eclipse.paho.client.mqttv3.*
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
 import java.util.concurrent.ConcurrentHashMap
@@ -61,46 +63,78 @@ class MqttService private constructor(
     // Legacy single callback for backward compatibility
     private var legacyMessageCallback: MessageCallback? = null
     
+    // Track subscribed topics to avoid duplicate subscriptions
+    private val subscribedTopics = ConcurrentHashMap<String, Int>()
+    
+    // Connection state
+    private val _isConnected = MutableStateFlow(false)
+    val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
+
+    // Callbacks for connection events
+    private val connectCallbacks = mutableListOf<() -> Unit>()
+    private val disconnectCallbacks = mutableListOf<() -> Unit>()
+    
     fun initialize(callback: MessageCallback? = null) {
         legacyMessageCallback = callback
         Log.d(TAG, "MqttService initialized")
     }
     
     /**
-     * Register a listener for a specific topic
+     * Register a listener for a specific topic and automatically subscribe
      */
     fun addTopicListener(topic: String, callback: MessageCallback) {
-        if (topic.contains('+') || topic.contains('#')) {
+        val wasEmpty = if (topic.contains('+') || topic.contains('#')) {
             // Handle wildcard topics
-            patternListeners.getOrPut(topic) { mutableListOf() }.add(callback)
+            val listeners = patternListeners.getOrPut(topic) { mutableListOf() }
+            val empty = listeners.isEmpty()
+            listeners.add(callback)
             Log.d(TAG, "Added pattern listener for topic: $topic")
+            empty
         } else {
             // Handle exact topic match
-            topicListeners.getOrPut(topic) { mutableListOf() }.add(callback)
+            val listeners = topicListeners.getOrPut(topic) { mutableListOf() }
+            val empty = listeners.isEmpty()
+            listeners.add(callback)
             Log.d(TAG, "Added exact listener for topic: $topic")
+            empty
+        }
+        
+        // Auto-subscribe to topic if this is the first listener and we're connected
+        if (wasEmpty && connectionState.value && !subscribedTopics.containsKey(topic)) {
+            subscribeToTopicInternal(topic)
         }
     }
     
     /**
-     * Remove a specific listener for a topic
+     * Remove a specific listener for a topic and unsubscribe if no listeners remain
      */
     fun removeTopicListener(topic: String, callback: MessageCallback) {
-        if (topic.contains('+') || topic.contains('#')) {
+        val isEmpty = if (topic.contains('+') || topic.contains('#')) {
             patternListeners[topic]?.remove(callback)
-            if (patternListeners[topic]?.isEmpty() == true) {
+            val empty = patternListeners[topic]?.isEmpty() == true
+            if (empty) {
                 patternListeners.remove(topic)
             }
+            empty
         } else {
             topicListeners[topic]?.remove(callback)
-            if (topicListeners[topic]?.isEmpty() == true) {
+            val empty = topicListeners[topic]?.isEmpty() == true
+            if (empty) {
                 topicListeners.remove(topic)
             }
+            empty
         }
+        
         Log.d(TAG, "Removed listener for topic: $topic")
+        
+        // Auto-unsubscribe if no more listeners and not the default subscribe topic
+        if (isEmpty && subscribedTopics.containsKey(topic) && topic != mqttProperties.value.subscribeTopic) {
+            unsubscribeFromTopicInternal(topic)
+        }
     }
     
     /**
-     * Remove all listeners for a specific topic
+     * Remove all listeners for a specific topic and unsubscribe
      */
     fun removeAllTopicListeners(topic: String) {
         if (topic.contains('+') || topic.contains('#')) {
@@ -109,6 +143,11 @@ class MqttService private constructor(
             topicListeners.remove(topic)
         }
         Log.d(TAG, "Removed all listeners for topic: $topic")
+        
+        // Auto-unsubscribe if not the default subscribe topic
+        if (subscribedTopics.containsKey(topic) && topic != mqttProperties.value.subscribeTopic) {
+            unsubscribeFromTopicInternal(topic)
+        }
     }
     
     /**
@@ -152,8 +191,21 @@ class MqttService private constructor(
             return
         }
         
+        subscribeToTopicInternal(topic, qos)
+    }
+    
+    /**
+     * Internal method to handle subscription
+     */
+    private fun subscribeToTopicInternal(topic: String, qos: Int? = null) {
+        if (subscribedTopics.containsKey(topic)) {
+            Log.d(TAG, "Already subscribed to topic: $topic")
+            return
+        }
+        
         val actualQos = qos ?: mqttProperties.value.qos.value
         subscribeTo(topic, actualQos)
+        subscribedTopics[topic] = actualQos
     }
     
     /**
@@ -165,10 +217,23 @@ class MqttService private constructor(
             return
         }
         
+        unsubscribeFromTopicInternal(topic)
+    }
+    
+    /**
+     * Internal method to handle unsubscription
+     */
+    private fun unsubscribeFromTopicInternal(topic: String) {
+        if (!subscribedTopics.containsKey(topic)) {
+            Log.d(TAG, "Not subscribed to topic: $topic")
+            return
+        }
+        
         try {
             mqttClient?.unsubscribe(topic, null, object : IMqttActionListener {
                 override fun onSuccess(asyncActionToken: IMqttToken?) {
                     Log.d(TAG, "Unsubscribed from topic: $topic")
+                    subscribedTopics.remove(topic)
                 }
                 
                 override fun onFailure(asyncActionToken: IMqttToken?, exception: Throwable?) {
@@ -275,7 +340,10 @@ class MqttService private constructor(
         return topicIndex == topicParts.size && patternIndex == patternParts.size
     }
     
-    fun connect(onSuccessCallback: (() -> Unit)? = null) {
+    /**
+     * Connect to the MQTT broker
+     */
+    fun connect(onComplete: () -> Unit = {}) {
         val properties = mqttProperties.value
         if (!properties.enabled) {
             Log.d(TAG, "MQTT is disabled in settings")
@@ -284,8 +352,8 @@ class MqttService private constructor(
         
         if (isConnecting || connectionState.value) {
             Log.d(TAG, "Already connecting or connected")
-            if (connectionState.value && onSuccessCallback != null) {
-                onSuccessCallback()
+            if (connectionState.value && onComplete != null) {
+                onComplete()
             }
             return
         }
@@ -298,7 +366,7 @@ class MqttService private constructor(
                 createMqttClient(properties)
                 val connOpts = createConnectionOptions(properties)
                 
-                mqttClient?.connect(connOpts, null, createConnectionListener(onSuccessCallback))
+                mqttClient?.connect(connOpts, null, createConnectionListener(onComplete))
                 
             } catch (e: Exception) {
                 Log.e(TAG, "Exception during connect initialization", e)
@@ -388,6 +456,7 @@ class MqttService private constructor(
                 
                 handleSuccessfulConnection()
                 onSuccessCallback?.invoke()
+                notifyConnected()
             }
             
             override fun onFailure(asyncActionToken: IMqttToken?, exception: Throwable?) {
@@ -403,6 +472,16 @@ class MqttService private constructor(
         val properties = mqttProperties.value
         
         subscribeTo(properties.subscribeTopic)
+        subscribedTopics[properties.subscribeTopic] = properties.qos.value
+        
+        // Re-subscribe to all topics that have listeners
+        val allTopics = (topicListeners.keys + patternListeners.keys).toSet()
+        allTopics.forEach { topic ->
+            if (topic != properties.subscribeTopic && !subscribedTopics.containsKey(topic)) {
+                subscribeToTopicInternal(topic)
+            }
+        }
+        
         publishAvailabilityStatus(true)
         
         // Notify connection listeners
@@ -456,6 +535,9 @@ class MqttService private constructor(
         return minOf(delay, properties.maxReconnectInterval)
     }
     
+    /**
+     * Disconnect from the MQTT broker
+     */
     fun disconnect() {
         serviceScope.launch {
             try {
@@ -483,6 +565,7 @@ class MqttService private constructor(
             } finally {
                 mqttRepository.updateConnectionState(false)
                 isConnecting = false
+                notifyDisconnected()
             }
         }
     }
@@ -505,9 +588,15 @@ class MqttService private constructor(
     }
     
     /**
-     * Clear all listeners
+     * Clear all listeners and unsubscribe from non-default topics
      */
     fun clearAllListeners() {
+        // Unsubscribe from all non-default topics
+        val defaultTopic = mqttProperties.value.subscribeTopic
+        subscribedTopics.keys.filter { it != defaultTopic }.forEach { topic ->
+            unsubscribeFromTopicInternal(topic)
+        }
+        
         topicListeners.clear()
         patternListeners.clear()
         globalListeners.clear()
@@ -626,10 +715,111 @@ class MqttService private constructor(
         }
     }
     
+    /**
+     * Register a callback to be executed when MQTT connects
+     */
+    fun addOnConnectCallback(callback: () -> Unit) {
+        synchronized(connectCallbacks) {
+            connectCallbacks.add(callback)
+            
+            // If already connected, execute immediately
+            if (_isConnected.value) {
+                try {
+                    callback()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error executing connect callback", e)
+                }
+            }
+        }
+    }
+    
+    /**
+     * Register a callback to be executed when MQTT disconnects
+     */
+    fun addOnDisconnectCallback(callback: () -> Unit) {
+        synchronized(disconnectCallbacks) {
+            disconnectCallbacks.add(callback)
+            
+            // If already disconnected, execute immediately
+            if (!_isConnected.value) {
+                try {
+                    callback()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error executing disconnect callback", e)
+                }
+            }
+        }
+    }
+    
+    /**
+     * Remove a previously registered connect callback
+     */
+    fun removeOnConnectCallback(callback: () -> Unit) {
+        synchronized(connectCallbacks) {
+            connectCallbacks.remove(callback)
+        }
+    }
+    
+    /**
+     * Remove a previously registered disconnect callback
+     */
+    fun removeOnDisconnectCallback(callback: () -> Unit) {
+        synchronized(disconnectCallbacks) {
+            disconnectCallbacks.remove(callback)
+        }
+    }
+    
+    /**
+     * Notify all connect callbacks
+     */
+    private fun notifyConnected() {
+        _isConnected.value = true
+        
+        synchronized(connectCallbacks) {
+            connectCallbacks.forEach { callback ->
+                try {
+                    callback()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error executing connect callback", e)
+                }
+            }
+        }
+    }
+    
+    /**
+     * Notify all disconnect callbacks
+     */
+    private fun notifyDisconnected() {
+        _isConnected.value = false
+        
+        synchronized(disconnectCallbacks) {
+            disconnectCallbacks.forEach { callback ->
+                try {
+                    callback()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error executing disconnect callback", e)
+                }
+            }
+        }
+    }
+    
+    /**
+     * Clean up resources when service is destroyed
+     */
     fun destroy() {
         disconnect()
         clearAllListeners()
+        subscribedTopics.clear()
         serviceScope.cancel()
         executorService.shutdown()
+        
+        // Clear all callbacks
+        synchronized(connectCallbacks) {
+            connectCallbacks.clear()
+        }
+        
+        synchronized(disconnectCallbacks) {
+            disconnectCallbacks.clear()
+        }
     }
 }

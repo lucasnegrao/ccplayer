@@ -22,17 +22,15 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.lifecycle.whenStateAtLeast
-import androidx.media3.common.MediaItem
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
-import com.antiglitch.yetanothernotifier.services.MediaControllerCallback
 import com.antiglitch.yetanothernotifier.ui.components.NotificationCard
 import com.antiglitch.yetanothernotifier.data.properties.NotificationVisualProperties
 import com.antiglitch.yetanothernotifier.data.repository.NotificationVisualPropertiesRepository
-import com.antiglitch.yetanothernotifier.utils.NotificationUtils // Updated import
-import com.antiglitch.yetanothernotifier.utils.NotificationUtils.toAndroidGravity // Specific import for the extension function
+import com.antiglitch.yetanothernotifier.utils.NotificationUtils
+import com.antiglitch.yetanothernotifier.utils.NotificationUtils.toAndroidGravity
 import com.antiglitch.yetanothernotifier.utils.toPx
 import com.antiglitch.yetanothernotifier.ui.theme.YetAnotherNotifierTheme
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -45,14 +43,15 @@ class OverlayService : LifecycleService() {
     private var overlayView: ComposeView? = null
     private lateinit var savedStateRegistryOwner: ServiceSavedStateRegistryOwner
 
-    private var customMediaControllerInstance: CustomMediaController? = null
-
     companion object {
         private const val NOTIFICATION_ID = 1
         private const val CHANNEL_ID = "overlay_notification_channel"
         val appForegroundState = MutableStateFlow(false)
         val playerControllerState =
-            MutableStateFlow<androidx.media3.session.MediaController?>(null) // StateFlow for the player
+            MutableStateFlow<androidx.media3.session.MediaController?>(null)
+
+        // Reference to the custom media controller from orchestrator
+        private var customMediaController: CustomMediaController? = null
 
         fun startService(context: Context) {
             val intent = Intent(context, OverlayService::class.java)
@@ -67,6 +66,19 @@ class OverlayService : LifecycleService() {
             val intent = Intent(context, OverlayService::class.java)
             context.stopService(intent)
         }
+
+        /**
+         * Set the media controller from orchestrator
+         */
+        fun setMediaController(controller: CustomMediaController?) {
+            customMediaController = controller
+            playerControllerState.value = controller?.mediaController
+        }
+
+        /**
+         * Get the current media controller
+         */
+        fun getMediaController(): CustomMediaController? = customMediaController
     }
 
     override fun onCreate() {
@@ -78,7 +90,6 @@ class OverlayService : LifecycleService() {
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
 
         createNotificationChannel()
-        initializePlayerAndLoadMedia()
 
         lifecycleScope.launch {
             lifecycle.whenStateAtLeast(Lifecycle.State.CREATED) {
@@ -117,7 +128,6 @@ class OverlayService : LifecycleService() {
                     repository.properties,
                     appForegroundState
                 ) { currentProps: NotificationVisualProperties, appIsCurrentlyInForeground: Boolean ->
-                    // Use properties directly from repository - they already have screen dimensions
                     currentProps to appIsCurrentlyInForeground
                 }.collect { (activeVisualProperties, appIsCurrentlyForeground) ->
                     val currentOverlayViewNonNull =
@@ -126,7 +136,6 @@ class OverlayService : LifecycleService() {
                     params.apply {
                         width = activeVisualProperties.width.toPx(applicationContext)
                         height = activeVisualProperties.height.toPx(applicationContext)
-                        // Corrected call to the extension function
                         gravity = activeVisualProperties.gravity.toAndroidGravity()
                         
                         val marginPxValue = activeVisualProperties.margin.toPx(applicationContext)
@@ -164,31 +173,6 @@ class OverlayService : LifecycleService() {
         startForeground(NOTIFICATION_ID, createNotification())
     }
 
-    private fun initializePlayerAndLoadMedia() {
-        customMediaControllerInstance?.release() // Release any existing instance first
-        customMediaControllerInstance =
-            CustomMediaController(applicationContext, object : MediaControllerCallback {
-                override fun onInitialized(success: Boolean) {
-                    if (success) {
-                        playerControllerState.value = customMediaControllerInstance?.mediaController
-                        // Load the URL after initialization
-                        customMediaControllerInstance?.loadUrl("https://www.xvideos.com/video.kpmcidh5fe9/compilation_of_young_traps_pleasing_themselves_cum_and_fun")
-                    } else {
-                        playerControllerState.value = null
-                    }
-                }
-
-                override fun onLoadRequest() { /* TODO: Handle if needed */
-                }
-
-                override fun onError(error: String) { /* TODO: Handle error */
-                }
-
-                override fun onMediaLoaded(mediaItem: MediaItem) { /* TODO: Handle if needed */
-                }
-            })
-    }
-
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
@@ -215,22 +199,19 @@ class OverlayService : LifecycleService() {
 
     override fun onDestroy() {
         super.onDestroy()
-        customMediaControllerInstance?.release()
-        customMediaControllerInstance = null
+        // Don't release the controller here - it's managed by orchestrator
         playerControllerState.value = null
 
         overlayView?.let {
-            if (it.windowToken != null) { // Check if view is actually attached
+            if (it.windowToken != null) {
                 try {
                     windowManager.removeView(it)
                 } catch (e: IllegalArgumentException) {
-                    // View not attached or other issue, log or ignore
                     e.printStackTrace()
                 }
             }
             overlayView = null
         }
-        // serviceScope.cancel() // Not needed, lifecycleScope handles cancellation.
     }
 
     override fun onBind(intent: Intent): IBinder? {

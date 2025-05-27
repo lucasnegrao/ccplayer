@@ -30,7 +30,7 @@ abstract class BasePropertiesRepository<T : Any>(
         loadProperties()
     }
 
-    protected fun updateProperties(newProperties: T) {
+    fun updateProperties(newProperties: T) {
         android.util.Log.d(
             "BasePropertiesRepository",
             "Updating properties for $keyPrefix from ${_properties.value} to $newProperties"

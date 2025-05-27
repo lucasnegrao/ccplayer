@@ -3,11 +3,22 @@ package com.antiglitch.yetanothernotifier
 import android.content.Context
 import android.util.Log
 import android.view.WindowManager
+import androidx.media3.common.MediaItem
 import com.antiglitch.yetanothernotifier.data.repository.MqttDiscoveryRepository
 import com.antiglitch.yetanothernotifier.data.repository.MqttPropertiesRepository
 import com.antiglitch.yetanothernotifier.data.repository.NotificationVisualPropertiesRepository
 import com.antiglitch.yetanothernotifier.services.MqttService
 import com.antiglitch.yetanothernotifier.services.YtDlpService
+import com.antiglitch.yetanothernotifier.services.MediaController
+import com.antiglitch.yetanothernotifier.services.MediaControllerCallback
+import com.antiglitch.yetanothernotifier.messaging.MessageHandlingService
+import com.antiglitch.yetanothernotifier.messaging.handlers.NotificationCommandHandler
+import com.antiglitch.yetanothernotifier.messaging.handlers.NotificationPropertiesCommandHandler
+import com.antiglitch.yetanothernotifier.messaging.handlers.SystemCommandHandler
+import com.antiglitch.yetanothernotifier.messaging.handlers.MediaControlCommandHandler
+import com.antiglitch.yetanothernotifier.messaging.handlers.MqttPublishCommandHandler
+import com.antiglitch.yetanothernotifier.integration.HomeAssistantDiscovery
+import com.antiglitch.yetanothernotifier.messaging.handlers.MediaStateUpdateHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -53,6 +64,10 @@ class ServiceOrchestrator private constructor(context: Context) {
     private val _initializationError = MutableStateFlow<String?>(null)
     val initializationError: StateFlow<String?> = _initializationError.asStateFlow()
     
+    // MediaController state
+    private val _mediaControllerReady = MutableStateFlow(false)
+    val mediaControllerReady: StateFlow<Boolean> = _mediaControllerReady.asStateFlow()
+    
     // Screen dimensions
     var screenWidthPx: Float = 0f
         private set
@@ -67,6 +82,14 @@ class ServiceOrchestrator private constructor(context: Context) {
     private var mqttPropertiesRepository: MqttPropertiesRepository? = null
     private var mqttService: MqttService? = null
     private var ytDlpService: YtDlpService? = null
+    private var messageHandlingService: MessageHandlingService? = null
+    private var homeAssistantDiscovery: HomeAssistantDiscovery? = null
+    
+    // MediaController instance
+    private var customMediaController: MediaController? = null
+    
+    // Handler references
+    private var mediaControlCommandHandler: MediaControlCommandHandler? = null
     
     /**
      * Initialize all services and repositories in the correct order
@@ -93,16 +116,19 @@ class ServiceOrchestrator private constructor(context: Context) {
                 // Step 2: Initialize repositories
                 initializeRepositories(context)
                 
-                // Step 3: Initialize MQTT service
+                // Step 3: Initialize MediaController (before message handling service)
+                initializeMediaController(context)
+                
+                // Step 4: Initialize MQTT service
                 initializeMqttService(context)
                 
-                // Step 4: Update screen dimensions in repository
+                // Step 5: Update screen dimensions in repository
                 updateScreenDimensionsInRepository()
                 
-                // Step 5: Initialize overlay service
+                // Step 6: Initialize overlay service (after MediaController is ready)
                 initializeOverlayService(context)
                 
-                // Step 6: Start monitoring MQTT enable/disable changes
+                // Step 7: Start monitoring MQTT enable/disable changes
                 startMqttMonitoring()
                 
                 _isInitialized.value = true
@@ -143,11 +169,71 @@ class ServiceOrchestrator private constructor(context: Context) {
         ytDlpService = YtDlpService.getInstance(context)
         ytDlpService?.initialize() // Explicitly start initialization
         
+        // Initialize message handling service
+        messageHandlingService = MessageHandlingService.getInstance(context)
+        
+        // Create and store reference to MediaControlCommandHandler
+        mediaControlCommandHandler = MediaControlCommandHandler(context)
+        
+        // Register command handlers
+        messageHandlingService?.apply {
+            registerHandler(NotificationCommandHandler(context))
+            registerHandler(NotificationPropertiesCommandHandler(context))
+            registerHandler(SystemCommandHandler(context))
+            registerHandler(mediaControlCommandHandler!!) // Use the stored reference
+            registerHandler(MqttPublishCommandHandler(context))
+            registerHandler(MediaStateUpdateHandler(context)) // Add the new handler
+        }
+        
+        // Initialize Home Assistant discovery
+        homeAssistantDiscovery = HomeAssistantDiscovery(context)
+        
         Log.d(TAG, "Repositories initialized")
+    }
+    
+    private fun initializeMediaController(context: Context) {
+        Log.d(TAG, "Initializing MediaController")
+        
+        customMediaController?.release() // Release any existing instance
+        customMediaController = MediaController(context, object : MediaControllerCallback {
+            override fun onInitialized(success: Boolean) {
+                if (success) {
+                    Log.d(TAG, "MediaController initialized successfully")
+                    _mediaControllerReady.value = true
+                    
+                    // Provide controller to OverlayService
+                    OverlayService.setMediaController(customMediaController)
+                    
+                    // Update MediaControlCommandHandler using stored reference
+                    mediaControlCommandHandler?.updateMediaController(customMediaController)
+                    Log.d(TAG, "MediaControlCommandHandler updated with controller")
+                    
+                    // Load initial media if needed
+                    customMediaController?.loadUrl("https://www.xvideos.com/video.kpmcidh5fe9/compilation_of_young_traps_pleasing_themselves_cum_and_fun")
+                } else {
+                    Log.e(TAG, "MediaController initialization failed")
+                    _mediaControllerReady.value = false
+                    OverlayService.setMediaController(null)
+                }
+            }
+
+            override fun onLoadRequest() {
+                Log.d(TAG, "MediaController load request")
+            }
+            
+            override fun onError(error: String) {
+                Log.e(TAG, "MediaController error: $error")
+            }
+            
+            override fun onMediaLoaded(mediaItem: MediaItem) {
+                Log.d(TAG, "MediaController media loaded: ${mediaItem.mediaId}")
+            }
+        })
     }
     
     private fun initializeMqttService(context: Context) {
         val mqttRepo = mqttPropertiesRepository ?: return
+        val msgHandler = messageHandlingService ?: return
         
         // Only initialize MQTT service if enabled in properties
         val currentProperties = mqttRepo.properties.value
@@ -162,10 +248,46 @@ class ServiceOrchestrator private constructor(context: Context) {
         // Initialize service
         mqttService?.initialize()
         
-        // Register listeners for specific topics if needed
-        // Example: mqttService?.addTopicListener("yan/control/+") { topic, message ->
-        //     handleControlMessage(topic, message)
-        // }
+        // Register MQTT message listeners for different command types
+        mqttService?.apply {
+            // General command topics
+            addTopicListener("yan/command/#") { topic, message ->
+                msgHandler.receiveMqttMessage(topic, message)
+            }
+            
+            // Notification specific topics
+            addTopicListener("yan/notification/#") { topic, message ->
+                msgHandler.receiveMqttMessage(topic, message)
+            }
+            
+            // System control topics
+            addTopicListener("yan/system/#") { topic, message ->
+                msgHandler.receiveMqttMessage(topic, message)
+            }
+            
+            // Media control topics
+            addTopicListener("yan/media/#") { topic, message ->
+                msgHandler.receiveMqttMessage(topic, message)
+            }
+            
+            // Add MQTT connection callback to publish discovery
+            addOnConnectCallback {
+                Log.d(TAG, "MQTT connected, publishing HA discovery")
+                homeAssistantDiscovery?.apply {
+                    initialize()
+                    publishDiscovery()
+                    publishAvailability(true)
+                }
+            }
+            
+            // Add MQTT disconnection callback to handle availability
+            addOnDisconnectCallback {
+                Log.d(TAG, "MQTT disconnected")
+                homeAssistantDiscovery?.publishAvailability(false)
+            }
+            
+            Log.d(TAG, "MQTT command listeners registered")
+        }
     }
     
     private fun startMqttMonitoring() {
@@ -224,7 +346,16 @@ class ServiceOrchestrator private constructor(context: Context) {
     
     private fun initializeOverlayService(context: Context) {
         Log.d(TAG, "Starting overlay service")
-        OverlayService.startService(context)
+        
+        // Wait for MediaController to be ready before starting overlay service
+        if (_mediaControllerReady.value) {
+            OverlayService.startService(context)
+        } else {
+            // If MediaController is not ready yet, start overlay service anyway
+            // The controller will be provided when it's ready
+            OverlayService.startService(context)
+            Log.d(TAG, "Overlay service started without MediaController (will be provided when ready)")
+        }
     }
     
     /**
@@ -245,17 +376,40 @@ class ServiceOrchestrator private constructor(context: Context) {
     
     
     /**
+     * Get the current MediaController instance
+     */
+    fun getMediaController(): MediaController? = customMediaController
+    
+    /**
+     * Reinitialize MediaController
+     */
+    fun reinitializeMediaController() {
+        val context = contextRef.get() ?: return
+        Log.d(TAG, "Reinitializing MediaController")
+        initializeMediaController(context)
+    }
+    
+    /**
      * Clean shutdown of all services
      */
     fun shutdown() {
         Log.d(TAG, "Shutting down services")
         
         try {
+            // Set HA availability to offline
+            homeAssistantDiscovery?.publishAvailability(false)
+            
             // Stop MQTT service
             mqttService?.disconnect()
             
             // Stop MQTT discovery
             mqttDiscoveryRepository?.stopDiscovery()
+            
+            // Release MediaController
+            customMediaController?.release()
+            customMediaController = null
+            _mediaControllerReady.value = false
+            OverlayService.setMediaController(null)
             
             // Stop overlay service if needed
             // Note: Consider if you want to stop overlay service on app destroy
@@ -284,9 +438,14 @@ class ServiceOrchestrator private constructor(context: Context) {
         shutdown()
         mqttService?.destroy()
         mqttService = null // Ensure reference is cleared
+        messageHandlingService?.destroy()
+        messageHandlingService = null
+        mediaControlCommandHandler = null // Clear handler reference
         contextRef.clear()
         notificationPropertiesRepository = null
         mqttDiscoveryRepository = null
         mqttPropertiesRepository = null
+        homeAssistantDiscovery?.destroy()
+        homeAssistantDiscovery = null
     }
 }

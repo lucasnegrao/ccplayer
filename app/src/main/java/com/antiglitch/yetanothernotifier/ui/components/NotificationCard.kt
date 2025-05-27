@@ -19,8 +19,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.media3.common.MediaItem
 import com.antiglitch.yetanothernotifier.player.ExoPlayerComposable
 import com.antiglitch.yetanothernotifier.ui.properties.*
-import com.antiglitch.yetanothernotifier.service.MediaController
-import com.antiglitch.yetanothernotifier.service.MediaControllerCallback
+import com.antiglitch.yetanothernotifier.NotificationOverlayService
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -30,27 +29,12 @@ fun NotificationCard(
     val context = LocalContext.current
     val repository = NotificationVisualPropertiesRepository.getInstance(context)
     val properties by repository.properties.collectAsState()
-    
-    var mediaController by remember { mutableStateOf<androidx.media3.session.MediaController?>(null) }
-    var customMediaController by remember { mutableStateOf<MediaController?>(null) }
 
-    LaunchedEffect(Unit) {
-        initializeMediaController(
-            context = context,
-            onInitialized = { controller, customController ->
-                mediaController = controller
-                customMediaController = customController
-                customMediaController?.loadUrl("https://www.xvideos.com/video.kpmcidh5fe9/compilation_of_young_traps_pleasing_themselves_cum_and_fun")
-            }
-        )
-    }
+    val player by NotificationOverlayService.playerControllerState.collectAsState()
 
     Column(
         modifier = Modifier
-            .size(
-                width = properties.width,
-                height = properties.height
-            )
+            .fillMaxSize() // Changed from .size() to .fillMaxSize()
             .graphicsLayer(alpha = properties.transparency) // Apply transparency here
             .background(
                 color = MaterialTheme.colorScheme.surface,
@@ -66,39 +50,10 @@ fun NotificationCard(
         } else {
             RectangleShape
         }
-        
+
         ExoPlayerComposable(
-            player = mediaController,
+            player = player, // Use the player from the service
             shape = shape
         )
     }
-}
-
-private fun initializeMediaController(
-    context: Context,
-    onInitialized: (androidx.media3.session.MediaController?, MediaController?) -> Unit
-) {
-    var mediaControllerInstance: MediaController? = null
-    
-    mediaControllerInstance = MediaController(context, object : MediaControllerCallback {
-        override fun onInitialized(success: Boolean) {
-            if (success) {
-                onInitialized(mediaControllerInstance?.mediaController, mediaControllerInstance)
-            } else {
-                onInitialized(null, null)
-            }
-        }
-
-        override fun onLoadRequest() {
-
-        }
-
-        override fun onError(error: String) {
-
-        }
-
-        override fun onMediaLoaded(mediaItem: MediaItem) {
-
-        }
-    })
 }

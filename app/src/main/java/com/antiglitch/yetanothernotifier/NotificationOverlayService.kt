@@ -9,6 +9,7 @@ import android.graphics.PixelFormat
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
+import android.util.DisplayMetrics // Import DisplayMetrics
 import android.view.WindowManager
 import androidx.compose.ui.platform.ComposeView
 import androidx.core.app.NotificationCompat
@@ -29,27 +30,33 @@ import androidx.savedstate.SavedStateRegistryOwner
 import com.antiglitch.yetanothernotifier.ui.components.NotificationCard
 import com.antiglitch.yetanothernotifier.ui.properties.NotificationVisualPropertiesRepository
 import com.antiglitch.yetanothernotifier.ui.properties.toAndroidGravity
-import com.antiglitch.yetanothernotifier.ui.properties.toPx
+import com.antiglitch.yetanothernotifier.ui.properties.toPx // Ensure this is imported
 import com.antiglitch.yetanothernotifier.ui.theme.YetAnotherNotifierTheme
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+import com.antiglitch.yetanothernotifier.service.MediaController as CustomMediaController
+import com.antiglitch.yetanothernotifier.service.MediaControllerCallback
+import androidx.media3.common.MediaItem
 
 class NotificationOverlayService : LifecycleService() {
     private lateinit var windowManager: WindowManager
     private var overlayView: ComposeView? = null
-    private val serviceScope = CoroutineScope(Dispatchers.Main)
     private lateinit var savedStateRegistryOwner: ServiceSavedStateRegistryOwner
 
-    // Add screen dimensions properties
-    private var screenWidthDp: Float = 0f
-    private var screenHeightDp: Float = 0f
+    // Renamed to reflect pixel values
+    private var screenWidthPx: Float = 0f
+    private var screenHeightPx: Float = 0f
+    private var screenDensity: Float = 1f
+
+
+    private var customMediaControllerInstance: CustomMediaController? = null
 
     companion object {
         private const val NOTIFICATION_ID = 1
         private const val CHANNEL_ID = "overlay_notification_channel"
+        val appForegroundState = MutableStateFlow(false)
+        val playerControllerState = MutableStateFlow<androidx.media3.session.MediaController?>(null) // StateFlow for the player
 
         fun startService(context: Context) {
             val intent = Intent(context, NotificationOverlayService::class.java)
@@ -73,49 +80,33 @@ class NotificationOverlayService : LifecycleService() {
         savedStateRegistryOwner.performRestore()
 
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-
-        // Calculate real screen dimensions correctly
-        val displayMetrics = resources.displayMetrics
         
-        // Get actual screen size including navigation/status bars
-        val display = windowManager.defaultDisplay
         val realMetrics = android.util.DisplayMetrics()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
-            display.getRealMetrics(realMetrics)
+            windowManager.defaultDisplay.getRealMetrics(realMetrics)
         } else {
-            display.getMetrics(realMetrics)
+            windowManager.defaultDisplay.getMetrics(realMetrics)
         }
         
-        screenWidthDp = realMetrics.widthPixels.toFloat() // realMetrics.density
-        screenHeightDp = realMetrics.heightPixels.toFloat() // realMetrics.density
-
-        println("DEBUG: Real screen pixels: ${realMetrics.widthPixels}px x ${realMetrics.heightPixels}px")
-        println("DEBUG: Density: ${realMetrics.density}")
-        println("DEBUG: Screen dimensions: ${screenWidthDp}dp x ${screenHeightDp}dp")
+        screenWidthPx = realMetrics.widthPixels.toFloat()
+        screenHeightPx = realMetrics.heightPixels.toFloat()
+        screenDensity = realMetrics.density // Store density
 
         createNotificationChannel()
+        initializePlayerAndLoadMedia() // Initialize player
 
-        // Launch a coroutine that waits for the lifecycle to be CREATED before setting up Compose.
         lifecycleScope.launch {
             lifecycle.whenStateAtLeast(Lifecycle.State.CREATED) {
-                // This block executes once the service's lifecycle is actually CREATED.
-                // Initial add of the overlay view
                 val repository = NotificationVisualPropertiesRepository.getInstance(applicationContext)
-                val properties = repository.properties.first().withScreenDimensions(screenWidthDp, screenHeightDp)
-
-                println("DEBUG: Properties after screen dimensions - width: ${properties.width}, height: ${properties.height}")
-                println("DEBUG: Scale: ${properties.scale}, Aspect: ${properties.aspect.ratio}")
-
+                
                 val composeView = ComposeView(this@NotificationOverlayService).apply {
                     setViewTreeLifecycleOwner(this@NotificationOverlayService)
                     setViewTreeViewModelStoreOwner(object : ViewModelStoreOwner {
                         override val viewModelStore: ViewModelStore = ViewModelStore()
                     })
                     setViewTreeSavedStateRegistryOwner(savedStateRegistryOwner)
-
                     setContent {
                         YetAnotherNotifierTheme {
-                            // Force recomposition and maintain theme consistency
                             androidx.compose.runtime.key("notification_overlay") {
                                 NotificationCard()
                             }
@@ -124,9 +115,10 @@ class NotificationOverlayService : LifecycleService() {
                 }
                 this@NotificationOverlayService.overlayView = composeView
 
+                // Initialize params with basic settings. The combine block will set the actual values.
                 val params = WindowManager.LayoutParams(
-                    WindowManager.LayoutParams.WRAP_CONTENT,
-                    WindowManager.LayoutParams.WRAP_CONTENT,
+                    WindowManager.LayoutParams.WRAP_CONTENT, // Initial width
+                    WindowManager.LayoutParams.WRAP_CONTENT, // Initial height
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                         WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
                     } else {
@@ -134,54 +126,77 @@ class NotificationOverlayService : LifecycleService() {
                     },
                     WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
                     PixelFormat.TRANSLUCENT
-                ).apply {
-                    val androidGravityValue = properties.gravity.toAndroidGravity()
-                    gravity = androidGravityValue
-                    val marginPx = properties.margin.toPx(applicationContext)
-                    x = marginPx
-                    y = if ((androidGravityValue and android.view.Gravity.VERTICAL_GRAVITY_MASK) == android.view.Gravity.CENTER_VERTICAL) {
-                        0
+                )
+                // Gravity and x/y will be set in the combine block
+
+                combine(
+                    repository.properties,
+                    appForegroundState // Observe the StateFlow from companion
+                ) { currentProps, appIsCurrentlyInForeground ->
+                    // Convert screen pixels to Dp for withScreenDimensions
+                    val screenWidthInDp = screenWidthPx / screenDensity
+                    val screenHeightInDp = screenHeightPx / screenDensity
+                    val propertiesWithScreen = currentProps.withScreenDimensions(screenWidthInDp, screenHeightInDp)
+                    
+                    propertiesWithScreen to appIsCurrentlyInForeground
+                }.collect { (propertiesWithScreen, appIsCurrentlyInForeground) ->
+                    val currentOverlayViewNonNull = this@NotificationOverlayService.overlayView ?: return@collect
+
+                    params.apply {
+                        // propertiesWithScreen.width and .height are already Dp, convert to Px for WindowManager
+                        width = propertiesWithScreen.width.toPx(applicationContext) 
+                        height = propertiesWithScreen.height.toPx(applicationContext)
+                        val androidGravityValue = propertiesWithScreen.gravity.toAndroidGravity()
+                        gravity = androidGravityValue
+                        val marginPxValue = propertiesWithScreen.margin.toPx(applicationContext)
+                        x = marginPxValue
+                        y = if ((androidGravityValue and android.view.Gravity.VERTICAL_GRAVITY_MASK) == android.view.Gravity.CENTER_VERTICAL) {
+                            0
+                        } else {
+                            marginPxValue
+                        }
+                    }
+
+                    if (!appIsCurrentlyInForeground) {
+                        if (currentOverlayViewNonNull.windowToken == null && currentOverlayViewNonNull.parent == null) {
+                            try {
+                                windowManager.addView(currentOverlayViewNonNull, params)
+                            } catch (e: Exception) { e.printStackTrace() }
+                        } else if (currentOverlayViewNonNull.windowToken != null) { 
+                            try {
+                                windowManager.updateViewLayout(currentOverlayViewNonNull, params)
+                            } catch (e: Exception) { e.printStackTrace() }
+                        }
                     } else {
-                        marginPx
-                    }
-                }
-
-                // Add small delay to ensure theme is fully applied
-                kotlinx.coroutines.delay(100)
-
-                this@NotificationOverlayService.overlayView?.let { viewToAdd ->
-                    windowManager.addView(viewToAdd, params)
-                }
-
-                // --- NEW: Observe gravity/margin changes and update overlay position ---
-                serviceScope.launch {
-                    repository.properties.collect { updatedProperties ->
-                        val propertiesWithScreen = updatedProperties.withScreenDimensions(screenWidthDp, screenHeightDp)
-                        
-                        val updatedParams = params.apply {
-                            width = propertiesWithScreen.width.value.toInt()
-                            height = propertiesWithScreen.height.value.toInt()
-                            val androidGravityValue = updatedProperties.gravity.toAndroidGravity()
-                            gravity = androidGravityValue
-                            val marginPx = updatedProperties.margin.toPx(applicationContext)
-                            x = marginPx
-                            y = if ((androidGravityValue and android.view.Gravity.VERTICAL_GRAVITY_MASK) == android.view.Gravity.CENTER_VERTICAL) {
-                                0
-                            } else {
-                                marginPx
-                            }
-                        }
-                        overlayView?.let { view ->
-                            windowManager.updateViewLayout(view, updatedParams)
+                        if (currentOverlayViewNonNull.windowToken != null) {
+                            try {
+                                windowManager.removeView(currentOverlayViewNonNull)
+                            } catch (e: Exception) { e.printStackTrace() }
                         }
                     }
                 }
-                // --- END NEW ---
             }
         }
-
-        // Call startForeground. This will eventually lead to ON_START.
         startForeground(NOTIFICATION_ID, createNotification())
+    }
+
+    private fun initializePlayerAndLoadMedia() {
+        customMediaControllerInstance?.release() // Release any existing instance first
+        customMediaControllerInstance = CustomMediaController(applicationContext, object : MediaControllerCallback {
+            override fun onInitialized(success: Boolean) {
+                if (success) {
+                    playerControllerState.value = customMediaControllerInstance?.mediaController
+                    // Load the URL after initialization
+                    customMediaControllerInstance?.loadUrl("https://www.xvideos.com/video.kpmcidh5fe9/compilation_of_young_traps_pleasing_themselves_cum_and_fun")
+                } else {
+                    playerControllerState.value = null
+                }
+            }
+
+            override fun onLoadRequest() { /* TODO: Handle if needed */ }
+            override fun onError(error: String) { /* TODO: Handle error */ }
+            override fun onMediaLoaded(mediaItem: MediaItem) { /* TODO: Handle if needed */ }
+        })
     }
 
     private fun createNotificationChannel() {
@@ -209,11 +224,22 @@ class NotificationOverlayService : LifecycleService() {
 
     override fun onDestroy() {
         super.onDestroy()
+        customMediaControllerInstance?.release()
+        customMediaControllerInstance = null
+        playerControllerState.value = null
+
         overlayView?.let {
-            windowManager.removeView(it)
+            if (it.windowToken != null) { // Check if view is actually attached
+                try {
+                    windowManager.removeView(it)
+                } catch (e: IllegalArgumentException) {
+                    // View not attached or other issue, log or ignore
+                    e.printStackTrace()
+                }
+            }
             overlayView = null
         }
-        serviceScope.cancel()
+        // serviceScope.cancel() // Not needed, lifecycleScope handles cancellation.
     }
 
     override fun onBind(intent: Intent): IBinder? {

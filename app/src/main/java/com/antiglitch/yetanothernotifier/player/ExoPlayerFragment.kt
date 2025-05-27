@@ -129,7 +129,7 @@ private fun MediaPlayerScreen(
   modifier: Modifier = Modifier,
   shape: androidx.compose.ui.graphics.Shape = RectangleShape
 ) {
-  var showControls by remember { mutableStateOf(false) } // Hide controls by default for notification
+  var showControls by remember { mutableStateOf(false) }
   var currentContentScaleIndex by remember { mutableIntStateOf(0) }
   val contentScale = CONTENT_SCALES[currentContentScaleIndex].second
 
@@ -140,10 +140,7 @@ private fun MediaPlayerScreen(
     PlayerSurface(
       player = player,
       surfaceType = SURFACE_TYPE_TEXTURE_VIEW,
-      modifier = scaledModifier
-        .fillMaxSize()
-        .clip(shape)
-        .noRippleClickable { showControls = !showControls },
+      modifier = scaledModifier.noRippleClickable { showControls = !showControls },
     )
 
     if (presentationState.coverSurface) {

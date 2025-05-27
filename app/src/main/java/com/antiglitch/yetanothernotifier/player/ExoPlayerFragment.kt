@@ -58,6 +58,8 @@ import androidx.media3.demo.compose.layout.noRippleClickable
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.compose.PlayerSurface
 import androidx.media3.ui.compose.SURFACE_TYPE_SURFACE_VIEW
+import androidx.media3.ui.compose.SURFACE_TYPE_TEXTURE_VIEW
+
 import androidx.media3.ui.compose.modifiers.resizeWithContentScale
 import androidx.media3.ui.compose.state.rememberPresentationState
 
@@ -127,14 +129,16 @@ private fun MediaPlayerScreen(player: Player, modifier: Modifier = Modifier) {
   val scaledModifier = Modifier.resizeWithContentScale(contentScale, presentationState.videoSizeDp)
 
   // Only use MediaPlayerScreen's modifier once for the top level Composable
-  Box(modifier) {
+  Box(modifier.clipToBounds()) {
     // Always leave PlayerSurface to be part of the Compose tree because it will be initialised in
     // the process. If this composable is guarded by some condition, it might never become visible
     // because the Player will not emit the relevant event, e.g. the first frame being ready.
     PlayerSurface(
       player = player,
-      surfaceType = SURFACE_TYPE_SURFACE_VIEW,
-      modifier = scaledModifier.noRippleClickable { showControls = !showControls },
+      surfaceType = SURFACE_TYPE_TEXTURE_VIEW,
+      modifier = scaledModifier
+        .noRippleClickable { showControls = !showControls }
+        .clipToBounds(),
     )
 
     if (presentationState.coverSurface) {

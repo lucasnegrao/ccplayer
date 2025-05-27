@@ -70,44 +70,44 @@ class ExoPlayerFragment : Fragment() {
   ): View {
     return ComposeView(requireContext()).apply {
       setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-      setContent { ComposeDemoApp() }
+      setContent { ExoPlayerComposable() }
     }
   }
 }
 
 @Composable
-fun ComposeDemoApp(modifier: Modifier = Modifier) {
+fun ExoPlayerComposable(
+  player: Player? = null,
+  modifier: Modifier = Modifier
+) {
   val context = LocalContext.current
-  var player by remember { mutableStateOf<Player?>(null) }
+  var internalPlayer by remember { mutableStateOf<Player?>(null) }
+  
+  // Use provided player or create internal one
+  val currentPlayer = player ?: internalPlayer
 
-  // See the following resources
-  // https://developer.android.com/topic/libraries/architecture/lifecycle#onStop-and-savedState
-  // https://developer.android.com/develop/ui/views/layout/support-multi-window-mode#multi-window_mode_configuration
-  // https://developer.android.com/develop/ui/compose/layouts/adaptive/support-multi-window-mode#android_9
-
-  if (Build.VERSION.SDK_INT > 23) {
-    // Initialize/release in onStart()/onStop() only because in a multi-window environment multiple
-    // apps can be visible at the same time. The apps that are out-of-focus are paused, but video
-    // playback should continue.
-    LifecycleStartEffect(Unit) {
-      player = initializePlayer(context)
-      onStopOrDispose {
-        player?.apply { release() }
-        player = null
+  // Only manage lifecycle if no external player is provided
+  if (player == null) {
+    if (Build.VERSION.SDK_INT > 23) {
+      LifecycleStartEffect(Unit) {
+        internalPlayer = initializePlayer(context)
+        onStopOrDispose {
+          internalPlayer?.apply { release() }
+          internalPlayer = null
+        }
       }
-    }
-  } else {
-    // Call to onStop() is not guaranteed, hence we release the Player in onPause() instead
-    LifecycleResumeEffect(Unit) {
-      player = initializePlayer(context)
-      onPauseOrDispose {
-        player?.apply { release() }
-        player = null
+    } else {
+      LifecycleResumeEffect(Unit) {
+        internalPlayer = initializePlayer(context)
+        onPauseOrDispose {
+          internalPlayer?.apply { release() }
+          internalPlayer = null
+        }
       }
     }
   }
 
-  player?.let { MediaPlayerScreen(player = it, modifier = modifier.fillMaxSize()) }
+  currentPlayer?.let { MediaPlayerScreen(player = it, modifier = modifier.fillMaxSize()) }
 }
 
 private fun initializePlayer(context: Context): Player =

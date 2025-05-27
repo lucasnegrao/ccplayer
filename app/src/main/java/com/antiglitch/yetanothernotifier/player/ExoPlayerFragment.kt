@@ -44,6 +44,9 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LifecycleStartEffect
@@ -80,7 +83,8 @@ class ExoPlayerFragment : Fragment() {
 @Composable
 fun ExoPlayerComposable(
   player: Player? = null,
-  modifier: Modifier = Modifier
+  modifier: Modifier = Modifier,
+  shape: androidx.compose.ui.graphics.Shape = RectangleShape
 ) {
   val context = LocalContext.current
   var internalPlayer by remember { mutableStateOf<Player?>(null) }
@@ -109,7 +113,7 @@ fun ExoPlayerComposable(
     }
   }
 
-  currentPlayer?.let { MediaPlayerScreen(player = it, modifier = modifier.fillMaxSize()) }
+  currentPlayer?.let { MediaPlayerScreen(player = it, modifier = modifier.fillMaxSize(), shape = shape) }
 }
 
 private fun initializePlayer(context: Context): Player =
@@ -120,25 +124,26 @@ private fun initializePlayer(context: Context): Player =
 
 @OptIn(UnstableApi::class)
 @Composable
-private fun MediaPlayerScreen(player: Player, modifier: Modifier = Modifier) {
-  var showControls by remember { mutableStateOf(true) }
+private fun MediaPlayerScreen(
+  player: Player, 
+  modifier: Modifier = Modifier,
+  shape: androidx.compose.ui.graphics.Shape = RectangleShape
+) {
+  var showControls by remember { mutableStateOf(false) } // Hide controls by default for notification
   var currentContentScaleIndex by remember { mutableIntStateOf(0) }
   val contentScale = CONTENT_SCALES[currentContentScaleIndex].second
 
   val presentationState = rememberPresentationState(player)
   val scaledModifier = Modifier.resizeWithContentScale(contentScale, presentationState.videoSizeDp)
 
-  // Only use MediaPlayerScreen's modifier once for the top level Composable
-  Box(modifier.clipToBounds()) {
-    // Always leave PlayerSurface to be part of the Compose tree because it will be initialised in
-    // the process. If this composable is guarded by some condition, it might never become visible
-    // because the Player will not emit the relevant event, e.g. the first frame being ready.
+  Box(modifier.clip(shape)) {
     PlayerSurface(
       player = player,
       surfaceType = SURFACE_TYPE_TEXTURE_VIEW,
       modifier = scaledModifier
-        .noRippleClickable { showControls = !showControls }
-        .clipToBounds(),
+        .fillMaxSize()
+        .clip(shape)
+        .noRippleClickable { showControls = !showControls },
     )
 
     if (presentationState.coverSurface) {
@@ -157,13 +162,6 @@ private fun MediaPlayerScreen(player: Player, modifier: Modifier = Modifier) {
           .background(Color.Gray.copy(alpha = 0.4f))
           .navigationBarsPadding(),
       )
-    }
-
-    Button(
-      onClick = { currentContentScaleIndex = currentContentScaleIndex.inc() % CONTENT_SCALES.size },
-      modifier = Modifier.align(Alignment.TopCenter).padding(top = 48.dp),
-    ) {
-      Text("ContentScale is ${CONTENT_SCALES[currentContentScaleIndex].first}")
     }
   }
 }

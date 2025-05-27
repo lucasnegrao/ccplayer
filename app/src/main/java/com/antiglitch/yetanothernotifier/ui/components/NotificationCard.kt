@@ -60,7 +60,16 @@ fun NotificationCard(
                 }
             )
     ) {
-        ExoPlayerComposable(player = mediaController)
+        val shape = if (properties.roundedCorners) {
+            RoundedCornerShape(properties.cornerRadius)
+        } else {
+            RectangleShape
+        }
+        
+        ExoPlayerComposable(
+            player = mediaController,
+            shape = shape
+        )
     }
 }
 

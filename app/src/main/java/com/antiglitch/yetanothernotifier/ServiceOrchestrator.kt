@@ -4,7 +4,10 @@ import android.content.Context
 import android.util.Log
 import android.view.WindowManager
 import com.antiglitch.yetanothernotifier.data.repository.MqttDiscoveryRepository
+import com.antiglitch.yetanothernotifier.data.repository.MqttPropertiesRepository
 import com.antiglitch.yetanothernotifier.data.repository.NotificationVisualPropertiesRepository
+import com.antiglitch.yetanothernotifier.services.MqttService
+import com.antiglitch.yetanothernotifier.services.YtDlpService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -12,11 +15,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import java.lang.ref.WeakReference
 
 class ServiceOrchestrator private constructor(context: Context) {
     
     companion object {
+        private const val TAG = "ServiceOrchestrator"
+        
         @Volatile
         private var INSTANCE: ServiceOrchestrator? = null
         
@@ -58,25 +64,28 @@ class ServiceOrchestrator private constructor(context: Context) {
     // Repository references
     private var notificationPropertiesRepository: NotificationVisualPropertiesRepository? = null
     private var mqttDiscoveryRepository: MqttDiscoveryRepository? = null
+    private var mqttPropertiesRepository: MqttPropertiesRepository? = null
+    private var mqttService: MqttService? = null
+    private var ytDlpService: YtDlpService? = null
     
     /**
      * Initialize all services and repositories in the correct order
      */
     fun initialize() {
         val context = contextRef.get() ?: run {
-            Log.e("ServiceOrchestrator", "Context is null, cannot initialize")
+            Log.e(TAG, "Context is null, cannot initialize")
             _initializationError.value = "Context is null"
             return
         }
         
         if (_isInitialized.value) {
-            Log.d("ServiceOrchestrator", "Already initialized, skipping")
+            Log.d(TAG, "Already initialized, skipping")
             return
         }
         
         orchestratorScope.launch {
             try {
-                Log.d("ServiceOrchestrator", "Starting initialization sequence")
+                Log.d(TAG, "Starting initialization sequence")
                 
                 // Step 1: Calculate screen dimensions
                 calculateScreenDimensions(context)
@@ -84,18 +93,24 @@ class ServiceOrchestrator private constructor(context: Context) {
                 // Step 2: Initialize repositories
                 initializeRepositories(context)
                 
-                // Step 3: Update screen dimensions in repository
+                // Step 3: Initialize MQTT service
+                initializeMqttService(context)
+                
+                // Step 4: Update screen dimensions in repository
                 updateScreenDimensionsInRepository()
                 
-                // Step 4: Initialize overlay service
+                // Step 5: Initialize overlay service
                 initializeOverlayService(context)
+                
+                // Step 6: Start monitoring MQTT enable/disable changes
+                startMqttMonitoring()
                 
                 _isInitialized.value = true
                 _initializationError.value = null
-                Log.d("ServiceOrchestrator", "Initialization complete")
+                Log.d(TAG, "Initialization complete")
                 
             } catch (e: Exception) {
-                Log.e("ServiceOrchestrator", "Initialization failed", e)
+                Log.e(TAG, "Initialization failed", e)
                 _initializationError.value = e.message
                 _isInitialized.value = false
             }
@@ -111,19 +126,78 @@ class ServiceOrchestrator private constructor(context: Context) {
         screenHeightPx = realMetrics.heightPixels.toFloat()
         screenDensity = realMetrics.density
 
-        Log.d("ServiceOrchestrator", "Screen dimensions: ${screenWidthPx}x${screenHeightPx}px, density: $screenDensity")
+        Log.d(TAG, "Screen dimensions: ${screenWidthPx}x${screenHeightPx}px, density: $screenDensity")
     }
     
     private suspend fun initializeRepositories(context: Context) {
-        Log.d("ServiceOrchestrator", "Initializing repositories")
+        Log.d(TAG, "Initializing repositories")
         
         // Initialize notification properties repository
         notificationPropertiesRepository = NotificationVisualPropertiesRepository.getInstance(context)
         
-        // Initialize MQTT discovery repository
+        // Initialize MQTT repositories
         mqttDiscoveryRepository = MqttDiscoveryRepository.getInstance(context)
+        mqttPropertiesRepository = MqttPropertiesRepository.getInstance(context)
         
-        Log.d("ServiceOrchestrator", "Repositories initialized")
+        // Initialize YtDlpService
+        ytDlpService = YtDlpService.getInstance(context)
+        ytDlpService?.initialize() // Explicitly start initialization
+        
+        Log.d(TAG, "Repositories initialized")
+    }
+    
+    private fun initializeMqttService(context: Context) {
+        val mqttRepo = mqttPropertiesRepository ?: return
+        
+        // Only initialize MQTT service if enabled in properties
+        val currentProperties = mqttRepo.properties.value
+        if (!currentProperties.enabled) {
+            Log.d(TAG, "MQTT is disabled in properties - skipping initialization")
+            return
+        }
+        
+        Log.d(TAG, "Initializing MQTT service (enabled in properties)")
+        mqttService = MqttService.getInstance(context, mqttRepo)
+        
+        // Initialize service
+        mqttService?.initialize()
+        
+        // Register listeners for specific topics if needed
+        // Example: mqttService?.addTopicListener("yan/control/+") { topic, message ->
+        //     handleControlMessage(topic, message)
+        // }
+    }
+    
+    private fun startMqttMonitoring() {
+        val mqttRepo = mqttPropertiesRepository ?: return
+        
+        // Monitor MQTT enabled state changes
+        orchestratorScope.launch {
+            mqttRepo.properties.collectLatest { properties ->
+                if (properties.enabled) {
+                    Log.d(TAG, "MQTT enabled - initializing/connecting service")
+                    
+                    // Initialize service if not already done
+                    if (mqttService == null) {
+                        val context = contextRef.get()
+                        if (context != null) {
+                            mqttService = MqttService.getInstance(context, mqttRepo)
+                            mqttService?.initialize()
+                        }
+                    }
+                    
+                    // Connect the service
+                    mqttService?.connect {
+                        Log.d(TAG, "MQTT service connected successfully")
+                    }
+                } else {
+                    Log.d(TAG, "MQTT disabled - disconnecting and destroying service")
+                    mqttService?.disconnect()
+                    mqttService?.destroy()
+                    mqttService = null
+                }
+            }
+        }
     }
     
     private suspend fun updateScreenDimensionsInRepository() {
@@ -132,7 +206,7 @@ class ServiceOrchestrator private constructor(context: Context) {
         val screenWidthInDp = screenWidthPx / screenDensity
         val screenHeightInDp = screenHeightPx / screenDensity
 
-        Log.d("ServiceOrchestrator", "Screen dimensions in DP: ${screenWidthInDp}x${screenHeightInDp}")
+        Log.d(TAG, "Screen dimensions in DP: ${screenWidthInDp}x${screenHeightInDp}")
 
         // Wait for initial load and check if update is needed
         val currentProperties = repository.properties.value
@@ -141,15 +215,15 @@ class ServiceOrchestrator private constructor(context: Context) {
         val heightNeedsUpdate = kotlin.math.abs(currentProperties.screenHeightDp - screenHeightInDp) > tolerance
 
         if (widthNeedsUpdate || heightNeedsUpdate) {
-            Log.d("ServiceOrchestrator", "Updating screen dimensions in repository")
+            Log.d(TAG, "Updating screen dimensions in repository")
             repository.updateScreenDimensions(screenWidthInDp, screenHeightInDp)
         } else {
-            Log.d("ServiceOrchestrator", "Screen dimensions unchanged")
+            Log.d(TAG, "Screen dimensions unchanged")
         }
     }
     
     private fun initializeOverlayService(context: Context) {
-        Log.d("ServiceOrchestrator", "Starting overlay service")
+        Log.d(TAG, "Starting overlay service")
         OverlayService.startService(context)
     }
     
@@ -157,7 +231,7 @@ class ServiceOrchestrator private constructor(context: Context) {
      * Handle app going to foreground
      */
     fun onAppForeground() {
-        Log.d("ServiceOrchestrator", "App moved to foreground")
+        Log.d(TAG, "App moved to foreground")
         OverlayService.appForegroundState.value = true
     }
     
@@ -165,17 +239,21 @@ class ServiceOrchestrator private constructor(context: Context) {
      * Handle app going to background
      */
     fun onAppBackground() {
-        Log.d("ServiceOrchestrator", "App moved to background")
+        Log.d(TAG, "App moved to background")
         OverlayService.appForegroundState.value = false
     }
+    
     
     /**
      * Clean shutdown of all services
      */
     fun shutdown() {
-        Log.d("ServiceOrchestrator", "Shutting down services")
+        Log.d(TAG, "Shutting down services")
         
         try {
+            // Stop MQTT service
+            mqttService?.disconnect()
+            
             // Stop MQTT discovery
             mqttDiscoveryRepository?.stopDiscovery()
             
@@ -183,8 +261,11 @@ class ServiceOrchestrator private constructor(context: Context) {
             // Note: Consider if you want to stop overlay service on app destroy
             // contextRef.get()?.let { OverlayService.stopService(it) }
             
+            // YtDlpService doesn't need explicit shutdown (it uses coroutines that will be cancelled automatically)
+            ytDlpService = null
+            
         } catch (e: Exception) {
-            Log.e("ServiceOrchestrator", "Error during shutdown", e)
+            Log.e(TAG, "Error during shutdown", e)
         }
     }
     
@@ -201,8 +282,11 @@ class ServiceOrchestrator private constructor(context: Context) {
      */
     private fun cleanup() {
         shutdown()
+        mqttService?.destroy()
+        mqttService = null // Ensure reference is cleared
         contextRef.clear()
         notificationPropertiesRepository = null
         mqttDiscoveryRepository = null
+        mqttPropertiesRepository = null
     }
 }

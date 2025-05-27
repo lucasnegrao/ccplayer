@@ -3,10 +3,7 @@ package com.antiglitch.yetanothernotifier.utils
 import android.content.Context
 import android.net.Uri
 import android.util.Log
-import androidx.core.net.toUri
-import com.yausername.youtubedl_android.YoutubeDL
-import com.yausername.youtubedl_android.YoutubeDLException
-import com.yausername.youtubedl_android.YoutubeDLRequest
+import com.antiglitch.yetanothernotifier.services.YtDlpService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
@@ -23,15 +20,6 @@ enum class StreamType {
 
 object StreamTypeDetector {
     private const val TAG = "StreamTypeDetector"
-
-    // YoutubeDL initialization state
-    private var isYoutubeDLInitialized = false
-    private var youtubeDLInitializationFailed = false
-
-    // Cache for yt-dlp extractors
-    private var cachedExtractors: Set<String>? = null
-    private var extractorsCacheTime: Long = 0
-    private const val EXTRACTORS_CACHE_DURATION = 24 * 60 * 60 * 1000L // 24 hours
 
     // Common video file extensions
     private val videoExtensions = setOf(
@@ -56,98 +44,6 @@ object StreamTypeDetector {
         val thumbnail: String? = null,
         val uploader: String? = null
     )
-
-    // Initialize YoutubeDL if not already done
-    suspend fun initializeYoutubeDL(context: Context) {
-        if (isYoutubeDLInitialized || youtubeDLInitializationFailed) return
-
-        withContext(Dispatchers.IO) {
-            try {
-                Log.d(TAG, "Initializing YoutubeDL...")
-                YoutubeDL.getInstance().init(context)
-                isYoutubeDLInitialized = true
-                Log.d(TAG, "YoutubeDL initialized successfully")
-
-                // Pre-cache extractors after initialization
-                cacheYtDlpExtractors()
-            } catch (e: YoutubeDLException) {
-                Log.e(TAG, "Failed to initialize YoutubeDL", e)
-                youtubeDLInitializationFailed = true
-            }
-        }
-    }
-
-    private suspend fun cacheYtDlpExtractors() {
-        withContext(Dispatchers.IO) {
-            try {
-                Log.d(TAG, "Pre-caching yt-dlp extractors in background...")
-                getYtDlpExtractors()
-                Log.d(TAG, "yt-dlp extractors cached successfully")
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to pre-cache yt-dlp extractors: ${e.message}")
-            }
-        }
-    }
-
-    // Get cached extractors or fetch them
-    suspend fun getYtDlpExtractors(): Set<String> {
-        return withContext(Dispatchers.IO) {
-            if (!isYoutubeDLInitialized) {
-                Log.w(TAG, "YoutubeDL not initialized, returning empty extractors")
-                return@withContext emptySet()
-            }
-
-            val currentTime = System.currentTimeMillis()
-
-            // Return cached extractors if still valid
-            cachedExtractors?.let { extractors ->
-                if (currentTime - extractorsCacheTime < EXTRACTORS_CACHE_DURATION) {
-                    Log.d(TAG, "Using cached extractors (${extractors.size} extractors)")
-                    return@withContext extractors
-                }
-            }
-
-            // Fetch new extractors
-            try {
-                Log.d(TAG, "Fetching yt-dlp extractors...")
-                val request = YoutubeDLRequest(emptyList())
-                request.addOption("--list-extractors")
-                val response = YoutubeDL.getInstance().execute(request)
-
-                val extractors = response.out.split("\n")
-                    .filter { it.isNotBlank() && !it.startsWith(" ") }
-                    .map { it.trim().lowercase() }
-                    .toSet()
-
-                cachedExtractors = extractors
-                extractorsCacheTime = currentTime
-                Log.d(TAG, "Cached ${extractors.size} yt-dlp extractors")
-
-                return@withContext extractors
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to fetch yt-dlp extractors", e)
-                return@withContext cachedExtractors ?: emptySet()
-            }
-        }
-    }
-
-    // Check if URL matches any yt-dlp extractor
-    suspend fun isYtDlpSupported(url: String): Boolean {
-        val extractors = getYtDlpExtractors()
-        val host = url.toUri().host?.lowercase() ?: return false
-
-        // Extract the main domain (e.g., "example.com" from "www.example.com")
-        val mainDomain = host.split('.')[2].toString()
-
-//            .takeLast(2).joinToString(".")
-
-        // Match against extractors
-        return extractors.any { extractor ->
-            val extractorParts = extractor.lowercase().split(":")
-            val extractorDomain = extractorParts[0] // Extract the main part of the extractor
-            mainDomain.contains(extractorDomain) || extractorDomain.contains(mainDomain)
-        }
-    }
 
     // Extract title from webpage HTML
     private suspend fun extractWebpageMetadata(url: String): Pair<String?, String?> {
@@ -197,11 +93,8 @@ object StreamTypeDetector {
         }
     }
 
-    // Unified detection: returns both type and metadata, only calls yt-dlp if needed
+    // Unified detection: returns both type and metadata, uses YtDlpService
     suspend fun detectStreamInfo(url: String, context: Context? = null): StreamInfo {
-        // Initialize YoutubeDL if context is provided and not already initialized
-        context?.let { initializeYoutubeDL(it) }
-
         return withContext(Dispatchers.IO) {
             try {
                 val uri = Uri.parse(url)
@@ -226,27 +119,23 @@ object StreamTypeDetector {
                     )
                 }
 
-                // Step 2: Check if URL is supported by yt-dlp (before HEAD request)
+                // Step 2: Check if URL is supported by yt-dlp (using YtDlpService)
                 if (url.startsWith("http://") || url.startsWith("https://")) {
-                    val isYtDlpSupported = isYtDlpSupported(url)
+                    val ytDlpService = context?.let { YtDlpService.getInstance(it) }
+                    val isYtDlpSupported = ytDlpService?.isUrlSupported(url) ?: false
 
-                    if (isYtDlpSupported) {
+                    if (isYtDlpSupported && ytDlpService != null) {
                         Log.d(TAG, "URL matches yt-dlp extractor, trying yt-dlp resolution")
                         try {
-                            val request = YoutubeDLRequest(url)
-                            request.addOption("-f", "best")
-                            request.addOption("--no-check-certificate")
-                            request.addOption("--socket-timeout", "8")
-                            val streamInfo = YoutubeDL.getInstance().getInfo(request)
-                            val resolvedUrl = streamInfo.url
-                            if (resolvedUrl != null && resolvedUrl.isNotEmpty()) {
+                            val videoInfo = ytDlpService.extractVideoInfo(url)
+                            if (videoInfo != null && !videoInfo.url.isNullOrEmpty()) {
                                 Log.d(TAG, "yt-dlp successfully resolved - detected as VIDEO")
                                 return@withContext StreamInfo(
                                     streamType = StreamType.VIDEO,
-                                    resolvedUrl = resolvedUrl,
-                                    title = streamInfo.title,
-                                    thumbnail = streamInfo.thumbnail,
-                                    uploader = streamInfo.uploader
+                                    resolvedUrl = videoInfo.url,
+                                    title = videoInfo.title,
+                                    thumbnail = videoInfo.thumbnail,
+                                    uploader = videoInfo.uploader
                                 )
                             }
                         } catch (e: Exception) {

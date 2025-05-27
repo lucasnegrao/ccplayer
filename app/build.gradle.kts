@@ -95,4 +95,7 @@ dependencies {
     //yt-dlp
     implementation("io.github.junkfood02.youtubedl-android:library:0.17.4")
 
+    // MQTT dependencies
+    implementation("org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5")
+    implementation("org.eclipse.paho:org.eclipse.paho.android.service:1.1.1")
 }

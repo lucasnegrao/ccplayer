@@ -15,7 +15,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Pending
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextField
@@ -57,6 +60,7 @@ import com.antiglitch.yetanothernotifier.data.repository.MqttDiscoveryRepository
 import com.antiglitch.yetanothernotifier.data.repository.MqttPropertiesRepository
 import com.antiglitch.yetanothernotifier.data.properties.MqttPropertyRanges
 import com.antiglitch.yetanothernotifier.data.properties.QosLevel
+import com.antiglitch.yetanothernotifier.services.MqttService
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -70,11 +74,18 @@ fun MqttPropertiesFragment(
     val discoveryRepository = MqttDiscoveryRepository.getInstance(context)
     val properties by repository.properties.collectAsState()
     val discoveryState by discoveryRepository.discoveryState.collectAsState()
+    
+    // Get MQTT service instance to monitor connection state
+    val mqttService = remember { MqttService.getInstance(context, repository) }
+    val isConnected by mqttService.connectionState.collectAsState()
+    
     val scrollState = rememberScrollState()
     var isOptionChangeTrigger by remember { mutableStateOf(false) }
     var showDiscoveryResults by remember { mutableStateOf(false) }
     var showInternetPermissionDialog by remember { mutableStateOf(false) }
     var showLocationPermissionDialog by remember { mutableStateOf(false) }
+    var isTestingConnection by remember { mutableStateOf(false) }
+    var testConnectionResult by remember { mutableStateOf<String?>(null) }
 
     // Add dialog state variables
     var showServerHostDialog by remember { mutableStateOf(false) }
@@ -163,19 +174,21 @@ fun MqttPropertiesFragment(
         }
     }
 
-    // // Log when the fragment is composed and what onBackPressed is
-    // LaunchedEffect(Unit) {
-    //     Log.d(
-    //             "MqttPropertiesFragment",
-    //             "Fragment composed. onBackPressed is empty: ${onBackPressed == {}}"
-    //     )
-    //     if (!isOptionChangeTrigger) {
-    //         focusRequester.requestFocus()
-    //         scrollState.scrollTo(0)
-    //     } else {
-    //         isOptionChangeTrigger = false
-    //     }
-    // }
+    // Test connection function
+    val testConnection = {
+        isTestingConnection = true
+        testConnectionResult = null
+
+        // Get MqttService instance and test connection
+        val mqttService = MqttService.getInstance(context, repository)
+        mqttService.testConnection(
+            testProperties = properties,
+            onResult = { success, message ->
+                isTestingConnection = false
+                testConnectionResult = message
+            }
+        )
+    }
 
     Column(
         modifier =
@@ -188,7 +201,7 @@ fun MqttPropertiesFragment(
                 .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Add a back button at the top
+        // Header with back button and title
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -213,6 +226,48 @@ fun MqttPropertiesFragment(
             }
 
             Text(text = "MQTT Settings", style = MaterialTheme.typography.headlineMedium)
+        }
+
+        // MQTT Connection Status Indicator
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    color = if (isConnected) 
+                        MaterialTheme.colorScheme.primaryContainer 
+                    else 
+                        MaterialTheme.colorScheme.errorContainer,
+                    shape = RoundedCornerShape(8.dp)
+                )
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                imageVector = when {
+                    isConnected -> Icons.Default.CheckCircle
+                    properties.enabled -> Icons.Default.Error
+                    else -> Icons.Default.Pending
+                },
+                contentDescription = "Connection Status",
+                tint = if (isConnected) 
+                    MaterialTheme.colorScheme.onPrimaryContainer 
+                else 
+                    MaterialTheme.colorScheme.onErrorContainer
+            )
+            
+            Text(
+                text = when {
+                    isConnected -> "Connected to ${properties.serverHost}:${properties.serverPort}"
+                    properties.enabled -> "Disconnected"
+                    else -> "MQTT Disabled"
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (isConnected) 
+                    MaterialTheme.colorScheme.onPrimaryContainer 
+                else 
+                    MaterialTheme.colorScheme.onErrorContainer
+            )
         }
 
         // MQTT Enabled Control
@@ -266,7 +321,7 @@ fun MqttPropertiesFragment(
                 LocalContentColor provides MaterialTheme.colorScheme.onSurfaceVariant
             ) {
                 TvFriendlyChipsSelect(
-                    title = "Connection Type",
+                    title = "Encryption Type",
                     options = EncryptionType.values().toList(),
                     selectedOption = properties.encryption,
                     onOptionSelected = {
@@ -279,23 +334,51 @@ fun MqttPropertiesFragment(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Server Host with Discovery
+            // Server and Port input
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 CompactInputChip(
-                    label = "Server Host",
+                    label = "Server",
                     value = properties.serverHost,
                     onClick = {
                         tempTextInput = properties.serverHost
                         showServerHostDialog = true
                     },
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(0.6f)
                 )
 
-                // Discovery button
+                CompactInputChip(
+                    label = "Port",
+                    value = properties.serverPort.toString(),
+                    onClick = {
+                        tempTextInput = properties.serverPort.toString()
+                        showPortDialog = true
+                    },
+                    modifier = Modifier.weight(0.4f)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Action buttons row: Test Connection, Discovery
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Button(
+                    onClick = { testConnection() },
+                    enabled = !isTestingConnection && properties.serverHost.isNotEmpty(),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = if (isTestingConnection) "Testing..." else "Test Connection"
+                    )
+                }
+
                 Button(
                     onClick = {
                         when (discoveryState) {
@@ -303,26 +386,52 @@ fun MqttPropertiesFragment(
                             else -> checkDiscoveryPermissions()
                         }
                     },
-                    enabled = discoveryState !is DiscoveryState.Scanning
+                    enabled = discoveryState !is DiscoveryState.Scanning,
+                    modifier = Modifier.weight(1f)
                 ) {
-                    Icon(
-                        imageVector =
-                            when (discoveryState) {
-                                is DiscoveryState.Scanning -> Icons.Default.Close
-                                else -> Icons.Default.Search
-                            },
-                        contentDescription =
-                            when (discoveryState) {
-                                is DiscoveryState.Scanning -> "Stop Discovery"
-                                else -> "Discover MQTT Servers"
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector =
+                                when (discoveryState) {
+                                    is DiscoveryState.Scanning -> Icons.Default.Close
+                                    else -> Icons.Default.Search
+                                },
+                            contentDescription =
+                                when (discoveryState) {
+                                    is DiscoveryState.Scanning -> "Stop Discovery"
+                                    else -> "Discover MQTT Servers"
+                                }
+                        )
+                        Text(
+                            text = when (discoveryState) {
+                                is DiscoveryState.Scanning -> "Stop"
+                                else -> "Discover"
                             }
-                    )
+                        )
+                    }
                 }
+            }
+
+            // Test connection result
+            testConnectionResult?.let { result ->
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = result,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (result.contains("successful"))
+                        MaterialTheme.colorScheme.primary
+                    else
+                        MaterialTheme.colorScheme.error
+                )
             }
 
             // Discovery status
             when (val currentState = discoveryState) {
                 is DiscoveryState.Scanning -> {
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "Scanning for MQTT servers...",
                         style = MaterialTheme.typography.bodySmall,
@@ -331,6 +440,7 @@ fun MqttPropertiesFragment(
                 }
 
                 is DiscoveryState.Error -> {
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "Discovery error: ${currentState.message}",
                         style = MaterialTheme.typography.bodySmall,
@@ -339,6 +449,7 @@ fun MqttPropertiesFragment(
                 }
 
                 is DiscoveryState.Found -> {
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "Found ${currentState.services.size} MQTT server(s)",
                         style = MaterialTheme.typography.bodySmall,
@@ -388,26 +499,8 @@ fun MqttPropertiesFragment(
                     }
                 }
             }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Server Port - Convert from Slider to InputChip
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                CompactInputChip(
-                    label = "Port",
-                    value = properties.serverPort.toString(),
-                    onClick = {
-                        tempTextInput = properties.serverPort.toString()
-                        showPortDialog = true
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
         }
+
         // Authentication
         Column(
             modifier =
@@ -631,7 +724,7 @@ fun MqttPropertiesFragment(
     // Add the dialogs outside the main composable content
     if (showServerHostDialog) {
         TextInputDialog(
-            title = "Enter Server Host",
+            title = "Enter Server Address",
             value = properties.serverHost,
             onDismiss = { showServerHostDialog = false },
             onConfirm = { repository.updateServerHost(it) }

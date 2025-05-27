@@ -26,12 +26,19 @@ data class MqttProperties(
     val password: String = "",
     val subscribeTopic: String = "yan/control/#",
     val publishTopic: String = "yan/status",
+    val availabilityTopic: String = "yan/availability", // Add availability topic
+    val onlinePayload: String = "online", // Add online payload
+    val offlinePayload: String = "offline", // Add offline payload
     val autoReconnect: Boolean = true,
     val cleanSession: Boolean = true,
     val keepAlive: Int = MqttPropertyRanges.DEFAULT_KEEP_ALIVE, // seconds
     val connectionTimeout: Int = MqttPropertyRanges.DEFAULT_CONNECTION_TIMEOUT, // seconds
     val qos: QosLevel = QosLevel.AT_MOST_ONCE,
-    val encryption: EncryptionType = EncryptionType.NONE
+    val encryption: EncryptionType = EncryptionType.NONE,
+    // Add connection state properties
+    val baseReconnectInterval: Long = 5L, // seconds
+    val maxReconnectInterval: Long = 300L, // seconds
+    val reconnectMultiplier: Double = 1.5
 ) {
     // Computed property for full server URI
     val serverUri: String
@@ -62,6 +69,12 @@ data class MqttProperties(
 
         fun validateTopic(value: String): String =
             value.trim().takeIf { it.isNotBlank() } ?: "yan/default"
+
+        fun validateAvailabilityTopic(value: String): String =
+            value.trim().takeIf { it.isNotBlank() } ?: "yan/availability"
+
+        fun validatePayload(value: String): String =
+            value.trim().takeIf { it.isNotBlank() } ?: "online"
     }
 }
 

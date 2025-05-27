@@ -15,7 +15,7 @@ import kotlin.reflect.KProperty1
 abstract class BasePropertiesRepository<T : Any>(
     private val preferencesDataStore: PreferencesDataStore,
     private val keyPrefix: String,
-    private val defaultProperties: T
+    internal val defaultProperties: T
 ) {
     private val repositoryScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 

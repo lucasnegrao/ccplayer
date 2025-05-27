@@ -1,7 +1,9 @@
 package com.antiglitch.yetanothernotifier
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
@@ -50,6 +52,7 @@ import com.antiglitch.yetanothernotifier.ui.properties.Orientation
 import androidx.compose.ui.platform.LocalContext
 //import androidx.compose.ui.Modifier.Companion.offset // May not be needed if using Modifier.offset directly
 import androidx.compose.foundation.layout.offset // Import for Modifier.offset
+import androidx.compose.runtime.LaunchedEffect
 import com.antiglitch.yetanothernotifier.ui.properties.toAndroidGravity // Ensure this is imported if not already
 import com.antiglitch.yetanothernotifier.ui.fragments.OverlayPermissionWarningFragment
 import com.antiglitch.yetanothernotifier.ui.theme.YetAnotherNotifierTheme
@@ -63,6 +66,9 @@ class MainActivity : ComponentActivity() {
     // Create state holders for permission statuses
     private val hasOverlayPermission = mutableStateOf(false)
     private val hasInternetPermission = mutableStateOf(false)
+    var screenWidthPx: Float = 0f
+    var screenHeightPx: Float = 0f
+    var screenDensity: Float = 1f
 
     @OptIn(ExperimentalTvMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -70,6 +76,9 @@ class MainActivity : ComponentActivity() {
 
         // Initial check for permissions
         checkPermissions()
+        
+        // Don't initialize screen dimensions immediately - do it after repository loads
+        calculateScreenDimensions()
 
         setContent {
             YetAnotherNotifierTheme {
@@ -80,6 +89,10 @@ class MainActivity : ComponentActivity() {
                 if (hasOverlayPermission.value && hasInternetPermission.value) {
                     // Both permissions granted, show the main screen
                     NotificationPropertiesScreen()
+                    // Initialize screen dimensions after UI is ready
+                    LaunchedEffect(Unit) {
+                        initializeScreenDimensionsAfterLoad()
+                    }
                     // Start the service here, once, after permissions are granted and UI is ready.
                     NotificationOverlayService.startService(this)
                 } else {
@@ -140,6 +153,67 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    private fun calculateScreenDimensions() {
+        val windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        val realMetrics = android.util.DisplayMetrics()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+            windowManager.defaultDisplay.getRealMetrics(realMetrics)
+        } else {
+            windowManager.defaultDisplay.getMetrics(realMetrics)
+        }
+
+        screenWidthPx = realMetrics.widthPixels.toFloat()
+        screenHeightPx = realMetrics.heightPixels.toFloat()
+        screenDensity = realMetrics.density
+        
+        Log.d("MainActivity", "Screen dimensions calculated: ${screenWidthPx}x${screenHeightPx}px, density: $screenDensity")
+    }
+
+    private suspend fun initializeScreenDimensionsAfterLoad() {
+        val screenWidthInDp = screenWidthPx / screenDensity
+        val screenHeightInDp = screenHeightPx / screenDensity
+        
+        Log.d("MainActivity", "Screen dimensions in DP: ${screenWidthInDp}x${screenHeightInDp}")
+        
+        val repository = NotificationVisualPropertiesRepository.getInstance(applicationContext)
+        
+        // Wait for initial load to complete and only update if dimensions are different
+        val currentProperties = repository.properties.value
+        Log.d("MainActivity", "Current stored dimensions: ${currentProperties.screenWidthDp}x${currentProperties.screenHeightDp}")
+        
+        val tolerance = 1.0f // Allow 1dp tolerance for float comparison
+        val widthNeedsUpdate = kotlin.math.abs(currentProperties.screenWidthDp - screenWidthInDp) > tolerance
+        val heightNeedsUpdate = kotlin.math.abs(currentProperties.screenHeightDp - screenHeightInDp) > tolerance
+        
+        if (widthNeedsUpdate || heightNeedsUpdate) {
+            Log.d("MainActivity", "Screen dimensions changed, updating repository")
+            repository.updateScreenDimensions(screenWidthInDp, screenHeightInDp)
+        } else {
+            Log.d("MainActivity", "Screen dimensions unchanged, not updating")
+        }
+    }
+
+    private fun initializeScreenDimensions() {
+        val windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        val realMetrics = android.util.DisplayMetrics()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+            windowManager.defaultDisplay.getRealMetrics(realMetrics)
+        } else {
+            windowManager.defaultDisplay.getMetrics(realMetrics)
+        }
+
+        screenWidthPx = realMetrics.widthPixels.toFloat()
+        screenHeightPx = realMetrics.heightPixels.toFloat()
+        screenDensity = realMetrics.density
+        
+        val screenWidthInDp = screenWidthPx / screenDensity
+        val screenHeightInDp = screenHeightPx / screenDensity
+        
+        // Use the correct method name
+        val repository = NotificationVisualPropertiesRepository.getInstance(applicationContext)
+        repository.updateScreenDimensions(screenWidthInDp, screenHeightInDp)
     }
 
     override fun onResume() {

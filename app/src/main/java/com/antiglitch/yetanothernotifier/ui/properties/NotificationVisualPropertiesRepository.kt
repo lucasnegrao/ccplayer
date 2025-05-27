@@ -68,6 +68,18 @@ class NotificationVisualPropertiesRepository private constructor(
         }
     }
 
+    fun updateScreenDimensions(screenWidthDp: Float, screenHeightDp: Float) {
+        val currentProperties = properties.value
+        android.util.Log.d("NotificationVisualPropertiesRepository", 
+            "Updating screen dimensions from ${currentProperties.screenWidthDp}x${currentProperties.screenHeightDp} to ${screenWidthDp}x${screenHeightDp}")
+        
+        val newProperties = currentProperties.copy(
+            screenWidthDp = screenWidthDp,
+            screenHeightDp = screenHeightDp
+        )
+        updateProperties(newProperties)
+    }
+
     // Batch update method
     fun updateMultipleProperties(updates: NotificationVisualProperties.() -> NotificationVisualProperties) {
         val currentProperties = properties.value

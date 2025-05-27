@@ -31,28 +31,17 @@ data class NotificationVisualProperties(
     val roundedCorners: Boolean = true,
     @Serializable(with = DpSerializer::class)
     val margin: Dp = 16.dp, // <-- Add margin property with default
-    val transparency: Float = 1.0f // Transparency (0.0f to 1.0f)
+    val transparency: Float = 1.0f, // Transparency (0.0f to 1.0f)
+    // Screen dimensions as regular properties
+    val screenWidthDp: Float = DEFAULT_SCREEN_WIDTH_DP,
+    val screenHeightDp: Float = DEFAULT_SCREEN_HEIGHT_DP
 ) {
-    // Screen dimensions for calculations (set by the service)
-    @kotlinx.serialization.Transient
-    var screenWidthDp: Float = DEFAULT_SCREEN_WIDTH_DP
-    @kotlinx.serialization.Transient
-    var screenHeightDp: Float = DEFAULT_SCREEN_HEIGHT_DP
-    
-    // Computed properties using actual screen dimensions
+    // Computed properties using stored screen dimensions
     val width: Dp
         get() = getSize(screenWidthDp, screenHeightDp).first
     
     val height: Dp
         get() = getSize(screenWidthDp, screenHeightDp).second
-    
-    // Function to set screen dimensions
-    fun withScreenDimensions(widthDp: Float, heightDp: Float): NotificationVisualProperties {
-        return this.apply {
-            screenWidthDp = widthDp
-            screenHeightDp = heightDp
-        }
-    }
     
     fun getSize(screenWidthDp: Float, screenHeightDp: Float): Pair<Dp, Dp> {
         // Debug logging

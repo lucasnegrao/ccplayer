@@ -1,6 +1,7 @@
 package com.antiglitch.yetanothernotifier.data.datastore
 
 import android.content.Context
+import android.util.Log // Import Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
@@ -26,27 +27,38 @@ class PreferencesDataStoreImpl(
 ) : PreferencesDataStore {
 
     override suspend fun <T> save(key: String, value: T) {
-        dataStore.edit { preferences ->
-            when (value) {
-                is String -> preferences[stringPreferencesKey(key)] = value
-                is Int -> preferences[intPreferencesKey(key)] = value
-                is Long -> preferences[longPreferencesKey(key)] = value
-                is Float -> preferences[floatPreferencesKey(key)] = value
-                is Boolean -> preferences[booleanPreferencesKey(key)] = value
-                else -> {
-                    // For complex objects, serialize to JSON
-                    val serializer = serializer(value!!::class.java)
-                    val jsonString = json.encodeToString(serializer, value)
-                    preferences[stringPreferencesKey(key)] = jsonString
+        try {
+            Log.d("PreferencesDataStore", "Saving key: $key, value: $value")
+            dataStore.edit { preferences ->
+                when (value) {
+                    is String -> preferences[stringPreferencesKey(key)] = value
+                    is Int -> preferences[intPreferencesKey(key)] = value
+                    is Long -> preferences[longPreferencesKey(key)] = value
+                    is Float -> preferences[floatPreferencesKey(key)] = value
+                    is Boolean -> preferences[booleanPreferencesKey(key)] = value
+                    else -> {
+                        // For complex objects, serialize to JSON
+                        val serializer = serializer(value!!::class.java)
+                        val jsonString = json.encodeToString(serializer, value)
+                        Log.d("PreferencesDataStore", "Serialized to JSON: $jsonString")
+                        preferences[stringPreferencesKey(key)] = jsonString
+                    }
                 }
             }
+            Log.d("PreferencesDataStore", "Successfully saved key: $key")
+        } catch (e: Exception) {
+            Log.e("PreferencesDataStore", "Error saving key $key", e)
+            throw e
         }
     }
 
     @Suppress("UNCHECKED_CAST")
     override fun <T> get(key: String, defaultValue: T): Flow<T> {
         return dataStore.data
-            .catch { emit(emptyPreferences()) }
+            .catch {
+                Log.e("PreferencesDataStore", "Error reading preferences for key $key, emitting empty", it) // Add logging for catch
+                emit(emptyPreferences())
+            }
             .map { preferences ->
                 when (defaultValue) {
                     is String -> preferences[stringPreferencesKey(key)] ?: defaultValue
@@ -61,10 +73,12 @@ class PreferencesDataStoreImpl(
                                 val serializer = serializer(defaultValue!!::class.java)
                                 json.decodeFromString(serializer, jsonString)
                             } catch (e: Exception) {
-                                defaultValue
+                                // Log the error here
+                                Log.e("PreferencesDataStore", "Failed to deserialize key $key. Falling back to default. Error: ${e.message}", e)
+                                defaultValue // Fallback to default on error
                             }
                         } else {
-                            defaultValue
+                            defaultValue // Fallback to default if no string is found
                         }
                     }
                 } as T

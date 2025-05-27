@@ -92,4 +92,7 @@ dependencies {
     implementation("androidx.media3:media3-session:1.7.1")
     // Legacy MediaSession support
     implementation("androidx.media:media:1.7.0")
+    //yt-dlp
+    implementation("io.github.junkfood02.youtubedl-android:library:0.17.4")
+
 }

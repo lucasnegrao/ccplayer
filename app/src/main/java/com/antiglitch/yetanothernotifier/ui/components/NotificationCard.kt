@@ -1,7 +1,7 @@
 package com.antiglitch.yetanothernotifier.ui.components
 
+import android.content.Context
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -16,9 +16,11 @@ import androidx.tv.material3.Text
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalContext
-import com.antiglitch.yetanothernotifier.player.ComposeDemoApp
+import androidx.media3.common.MediaItem
+import com.antiglitch.yetanothernotifier.player.ExoPlayerComposable
 import com.antiglitch.yetanothernotifier.ui.properties.*
-import com.antiglitch.yetanothernotifier.player.ExoPlayerFragment
+import com.antiglitch.yetanothernotifier.service.MediaController
+import com.antiglitch.yetanothernotifier.service.MediaControllerCallback
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -28,6 +30,20 @@ fun NotificationCard(
     val context = LocalContext.current
     val repository = NotificationVisualPropertiesRepository.getInstance(context)
     val properties by repository.properties.collectAsState()
+    
+    var mediaController by remember { mutableStateOf<androidx.media3.session.MediaController?>(null) }
+    var customMediaController by remember { mutableStateOf<MediaController?>(null) }
+
+    LaunchedEffect(Unit) {
+        initializeMediaController(
+            context = context,
+            onInitialized = { controller, customController ->
+                mediaController = controller
+                customMediaController = customController
+                customMediaController?.loadUrl("https://www.xvideos.com/video.ohkpfhke770/priscila_araujo_fucked_her_friend_gordinho_twice_in_the_same_day")
+            }
+        )
+    }
 
     Column(
         modifier = Modifier
@@ -44,6 +60,35 @@ fun NotificationCard(
                 }
             )
     ) {
-        ComposeDemoApp()
+        ExoPlayerComposable(player = mediaController)
     }
+}
+
+private fun initializeMediaController(
+    context: Context,
+    onInitialized: (androidx.media3.session.MediaController?, MediaController?) -> Unit
+) {
+    var mediaControllerInstance: MediaController? = null
+    
+    mediaControllerInstance = MediaController(context, object : MediaControllerCallback {
+        override fun onInitialized(success: Boolean) {
+            if (success) {
+                onInitialized(mediaControllerInstance?.mediaController, mediaControllerInstance)
+            } else {
+                onInitialized(null, null)
+            }
+        }
+
+        override fun onLoadRequest() {
+
+        }
+
+        override fun onError(error: String) {
+
+        }
+
+        override fun onMediaLoaded(mediaItem: MediaItem) {
+
+        }
+    })
 }

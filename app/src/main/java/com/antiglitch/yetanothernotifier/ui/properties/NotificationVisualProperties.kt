@@ -30,14 +30,75 @@ data class NotificationVisualProperties(
     @Serializable(with = DpSerializer::class)
     val margin: Dp = 16.dp // <-- Add margin property with default
 ) {
-    // Computed properties
+    // Screen dimensions for calculations (set by the service)
+    @kotlinx.serialization.Transient
+    var screenWidthDp: Float = DEFAULT_SCREEN_WIDTH_DP
+    @kotlinx.serialization.Transient
+    var screenHeightDp: Float = DEFAULT_SCREEN_HEIGHT_DP
+    
+    // Computed properties using actual screen dimensions
     val width: Dp
-        get() = (scale * 1000).dp  // This is just a placeholder - would be calculated from actual screen width
+        get() = getSize(screenWidthDp, screenHeightDp).first
     
     val height: Dp
-        get() = (width.value / aspect.ratio).dp
+        get() = getSize(screenWidthDp, screenHeightDp).second
+    
+    // Function to set screen dimensions
+    fun withScreenDimensions(widthDp: Float, heightDp: Float): NotificationVisualProperties {
+        return this.apply {
+            screenWidthDp = widthDp
+            screenHeightDp = heightDp
+        }
+    }
+    
+    fun getSize(screenWidthDp: Float, screenHeightDp: Float): Pair<Dp, Dp> {
+        // Debug logging
+        println("DEBUG: getSize called with screenWidth=$screenWidthDp, screenHeight=$screenHeightDp, scale=$scale, aspect=${aspect.ratio}")
+        
+        // Determine if this is a portrait aspect ratio (height > width)
+        val isPortraitRatio = aspect.ratio < 1.0f
+        
+        val finalWidth: Float
+        val finalHeight: Float
+        
+        if (isPortraitRatio) {
+            // For portrait ratios, scale applies to height
+            val targetHeight = screenHeightDp * scale // Remove 0.9f multiplier
+            val calculatedWidth = targetHeight * aspect.ratio
+            
+            // Check if width fits (leave small margin for safety)
+            val maxWidth = screenWidthDp * 0.95f
+            if (calculatedWidth > maxWidth) {
+                finalWidth = maxWidth
+                finalHeight = finalWidth / aspect.ratio
+            } else {
+                finalWidth = calculatedWidth
+                finalHeight = targetHeight
+            }
+        } else {
+            // For landscape ratios, scale applies to width
+            val targetWidth = screenWidthDp * scale // Remove 0.9f multiplier
+            val calculatedHeight = targetWidth / aspect.ratio
+            
+            // Check if height fits (leave small margin for safety)
+            val maxHeight = screenHeightDp * 0.95f
+            if (calculatedHeight > maxHeight) {
+                finalHeight = maxHeight
+                finalWidth = finalHeight * aspect.ratio
+            } else {
+                finalWidth = targetWidth
+                finalHeight = calculatedHeight
+            }
+        }
+        
+        println("DEBUG: Final dimensions: width=$finalWidth, height=$finalHeight")
+        return finalWidth.dp to finalHeight.dp
+    }
     
     companion object {
+        private const val DEFAULT_SCREEN_WIDTH_DP = 360f // Typical Android screen width
+        private const val DEFAULT_SCREEN_HEIGHT_DP = 640f // Typical Android screen height
+        
         // Validation methods to ensure values stay within ranges
         fun validateDuration(value: Long): Long = 
             value.coerceIn(PropertyRanges.DURATION)

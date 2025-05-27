@@ -41,8 +41,11 @@ class NotificationOverlayService : LifecycleService() {
     private lateinit var windowManager: WindowManager
     private var overlayView: ComposeView? = null
     private val serviceScope = CoroutineScope(Dispatchers.Main)
-
     private lateinit var savedStateRegistryOwner: ServiceSavedStateRegistryOwner
+
+    // Add screen dimensions properties
+    private var screenWidthDp: Float = 0f
+    private var screenHeightDp: Float = 0f
 
     companion object {
         private const val NOTIFICATION_ID = 1
@@ -67,9 +70,29 @@ class NotificationOverlayService : LifecycleService() {
         super.onCreate()
 
         savedStateRegistryOwner = ServiceSavedStateRegistryOwner(this)
-        savedStateRegistryOwner.performRestore() // <-- Add this line
+        savedStateRegistryOwner.performRestore()
 
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+
+        // Calculate real screen dimensions correctly
+        val displayMetrics = resources.displayMetrics
+        
+        // Get actual screen size including navigation/status bars
+        val display = windowManager.defaultDisplay
+        val realMetrics = android.util.DisplayMetrics()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+            display.getRealMetrics(realMetrics)
+        } else {
+            display.getMetrics(realMetrics)
+        }
+        
+        screenWidthDp = realMetrics.widthPixels.toFloat() // realMetrics.density
+        screenHeightDp = realMetrics.heightPixels.toFloat() // realMetrics.density
+
+        println("DEBUG: Real screen pixels: ${realMetrics.widthPixels}px x ${realMetrics.heightPixels}px")
+        println("DEBUG: Density: ${realMetrics.density}")
+        println("DEBUG: Screen dimensions: ${screenWidthDp}dp x ${screenHeightDp}dp")
+
         createNotificationChannel()
 
         // Launch a coroutine that waits for the lifecycle to be CREATED before setting up Compose.
@@ -78,7 +101,10 @@ class NotificationOverlayService : LifecycleService() {
                 // This block executes once the service's lifecycle is actually CREATED.
                 // Initial add of the overlay view
                 val repository = NotificationVisualPropertiesRepository.getInstance(applicationContext)
-                val properties = repository.properties.first()
+                val properties = repository.properties.first().withScreenDimensions(screenWidthDp, screenHeightDp)
+
+                println("DEBUG: Properties after screen dimensions - width: ${properties.width}, height: ${properties.height}")
+                println("DEBUG: Scale: ${properties.scale}, Aspect: ${properties.aspect.ratio}")
 
                 val composeView = ComposeView(this@NotificationOverlayService).apply {
                     setViewTreeLifecycleOwner(this@NotificationOverlayService)
@@ -125,7 +151,11 @@ class NotificationOverlayService : LifecycleService() {
                 // --- NEW: Observe gravity/margin changes and update overlay position ---
                 serviceScope.launch {
                     repository.properties.collect { updatedProperties ->
+                        val propertiesWithScreen = updatedProperties.withScreenDimensions(screenWidthDp, screenHeightDp)
+                        
                         val updatedParams = params.apply {
+                            width = propertiesWithScreen.width.value.toInt()
+                            height = propertiesWithScreen.height.value.toInt()
                             gravity = updatedProperties.gravity.toAndroidGravity()
                             val marginPx = updatedProperties.margin.toPx(applicationContext)
                             x = marginPx

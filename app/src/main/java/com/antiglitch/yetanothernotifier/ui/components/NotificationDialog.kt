@@ -1,12 +1,16 @@
 package com.antiglitch.yetanothernotifier.ui.components
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.tv.material3.MaterialTheme
-import androidx.tv.material3.Surface
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
@@ -16,6 +20,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
+import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.antiglitch.yetanothernotifier.ui.properties.NotificationVisualPropertiesRepository
 
@@ -28,7 +33,7 @@ fun NotificationDialog(
     val context = LocalContext.current
     val repository = NotificationVisualPropertiesRepository.getInstance(context)
     val properties by repository.properties.collectAsState()
-    
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(
@@ -63,7 +68,7 @@ fun NotificationDialog(
                     text = "Notification Dialog",
                     style = MaterialTheme.typography.headlineSmall
                 )
-                
+
                 Column {
                     Text(text = "Duration: ${properties.duration}ms")
                     Text(text = "Scale: ${properties.scale}")
@@ -72,7 +77,7 @@ fun NotificationDialog(
                         Text(text = "Radius: ${properties.cornerRadius}")
                     }
                 }
-                
+
                 Button(onClick = onDismiss) {
                     Text("Close")
                 }

@@ -1,15 +1,8 @@
 package com.antiglitch.yetanothernotifier.ui.properties
 
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.runtime.Composable
-import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.offset
-import androidx.compose.ui.unit.IntOffset
-import kotlin.math.roundToInt
 
 object NotificationUtils {
     // This function must be called from within a BoxScope
@@ -27,7 +20,7 @@ object NotificationUtils {
         }
     }
 
-   
+
     // Optionally, move gravity alignment helpers here from NotificationGravityUtils if not already done
     enum class Orientation { Horizontal, Vertical }
 
@@ -49,6 +42,7 @@ object NotificationUtils {
         return when (gravity) {
             Gravity.TOP_CENTER,
             Gravity.BOTTOM_CENTER -> Orientation.Vertical
+
             Gravity.CENTER -> Orientation.Horizontal // fallback
             else -> Orientation.Horizontal
         }

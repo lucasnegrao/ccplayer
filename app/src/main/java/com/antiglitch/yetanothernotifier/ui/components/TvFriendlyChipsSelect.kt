@@ -1,30 +1,42 @@
 package com.antiglitch.yetanothernotifier.ui.components
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import androidx.tv.material3.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.focus.focusProperties
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.FocusDirection
-import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.delay
+import androidx.compose.ui.unit.dp
+import androidx.tv.material3.Button
+import androidx.tv.material3.ExperimentalTvMaterial3Api
+import androidx.tv.material3.FilterChip
+import androidx.tv.material3.FilterChipDefaults
+import androidx.tv.material3.Icon
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Text
 import kotlinx.coroutines.MainScope
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.ui.input.pointer.pointerInput
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -42,7 +54,7 @@ fun <T> TvFriendlyChipsSelect(
     var expanded by remember { mutableStateOf(false) }
     val chipFocusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
-    
+
     // Helper functions to avoid code duplication
     val handleMainChipToggle: () -> Unit = {
         expanded = !expanded
@@ -55,7 +67,7 @@ fun <T> TvFriendlyChipsSelect(
             chipFocusRequester.requestFocus()
         }
     }
-    
+
     val handleOptionSelection: (T) -> Unit = { option: T ->
         if (multiSelect && onOptionsSelected != null) {
             val isSelected = selectedOptions.contains(option)
@@ -90,7 +102,7 @@ fun <T> TvFriendlyChipsSelect(
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.weight(1f)
             )
-            
+
             // Expandable chip - this should be the primary focus
             FilterChip(
                 selected = true,
@@ -112,42 +124,42 @@ fun <T> TvFriendlyChipsSelect(
                     contentColor = MaterialTheme.colorScheme.onSurface,
                     selectedContentColor = MaterialTheme.colorScheme.onSecondaryContainer
                 ),
-           
-            ) {
+
+                ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     // Current selection - smaller and centered text
                     Text(
-                        text = if (multiSelect) 
+                        text = if (multiSelect)
                             "${selectedOptions.size} selected"
-                        else 
+                        else
                             optionLabel(selectedOption),
                         style = MaterialTheme.typography.bodySmall,
                         textAlign = TextAlign.Center,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    
+
                     // Dropdown indicator
                     Icon(
-                        imageVector = if (expanded) Icons.Default.KeyboardArrowUp 
-                                     else Icons.Default.KeyboardArrowDown,
+                        imageVector = if (expanded) Icons.Default.KeyboardArrowUp
+                        else Icons.Default.KeyboardArrowDown,
                         contentDescription = if (expanded) "Collapse" else "Expand",
                         modifier = Modifier.size(16.dp) // Smaller icon
                     )
                 }
             }
         }
-        
+
         // Expanded options
         if (expanded) {
             Spacer(modifier = Modifier.height(12.dp))
-            
+
             // For TV navigation, a simple grid works better than FlowRow
             val chunkedOptions = options.chunked(3)
-            
+
             Column(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -162,7 +174,7 @@ fun <T> TvFriendlyChipsSelect(
                             } else {
                                 option == selectedOption
                             }
-                            
+
                             // Make sure each chip is properly focusable
                             FilterChip(
                                 selected = isSelected,
@@ -195,7 +207,7 @@ fun <T> TvFriendlyChipsSelect(
                                 )
                             }
                         }
-                        
+
                         // Fill remaining space in row with empty spaces
                         repeat(3 - rowOptions.size) {
                             Spacer(modifier = Modifier.weight(1f))
@@ -203,11 +215,11 @@ fun <T> TvFriendlyChipsSelect(
                     }
                 }
             }
-            
+
             // Done button for multi-select mode
             if (multiSelect) {
                 Spacer(modifier = Modifier.height(8.dp))
-                
+
                 Button(
                     onClick = { expanded = false },
                     modifier = Modifier
@@ -223,7 +235,7 @@ fun <T> TvFriendlyChipsSelect(
             }
         }
     }
-    
+
     // // Request focus on the chip when component is first displayed
     // LaunchedEffect(Unit) {
     //     chipFocusRequester.requestFocus()

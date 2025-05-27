@@ -1,28 +1,45 @@
 package com.antiglitch.yetanothernotifier.ui.fragments
 
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import android.app.Activity
+import android.content.Context
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.runtime.*
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.foundation.focusable
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.tv.material3.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.KeyboardArrowRight
-import android.content.Context
-import android.app.Activity
+import androidx.tv.material3.Card
+import androidx.tv.material3.CardDefaults
+import androidx.tv.material3.ExperimentalTvMaterial3Api
+import androidx.tv.material3.Glow
+import androidx.tv.material3.Icon
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Text
 
 data class SettingsItem(
     val title: String,
@@ -39,9 +56,9 @@ fun SettingsFragment(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val activity = context as? Activity
+    context as? Activity
     val prefs = remember { context.getSharedPreferences("focus_memory", Context.MODE_PRIVATE) }
-    
+
     val focusRequesters = remember { List(2) { FocusRequester() } }
     val scrollState = rememberScrollState()
     var currentFocusedIndex by remember { mutableStateOf(0) }
@@ -84,7 +101,7 @@ fun SettingsFragment(
     LaunchedEffect(Unit) {
         val lastFocusedIndex = prefs.getInt("settings_last_focus", 0)
         currentFocusedIndex = lastFocusedIndex.coerceIn(0, focusRequesters.size - 1)
-        
+
         scrollState.scrollTo(0)
         focusRequesters[currentFocusedIndex].requestFocus()
     }
@@ -106,85 +123,85 @@ fun SettingsFragment(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
 
-            // Header
+        // Header
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.Settings,
+                contentDescription = null,
+                modifier = Modifier.size(32.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+
+            Column {
+                Text(
+                    text = "Settings",
+                    style = MaterialTheme.typography.headlineMedium
+                )
+                Text(
+                    text = "Configure application preferences",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Settings items list
+        settingsItems.forEachIndexed { index, item ->
+            SettingsItemCard(
+                item = item,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focusRequesters[index])
+                    .onFocusChanged { focusState ->
+                        if (focusState.isFocused) {
+                            currentFocusedIndex = index
+                        }
+                    }
+            )
+        }
+
+        // App info section
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    shape = RoundedCornerShape(8.dp)
+                )
+                .padding(16.dp)
+        ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = Icons.Default.Settings,
+                    imageVector = Icons.Default.Info,
                     contentDescription = null,
-                    modifier = Modifier.size(32.dp),
-                    tint = MaterialTheme.colorScheme.primary
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                
+
                 Column {
                     Text(
-                        text = "Settings",
-                        style = MaterialTheme.typography.headlineMedium
-                    )
-                    Text(
-                        text = "Configure application preferences",
-                        style = MaterialTheme.typography.bodyMedium,
+                        text = "Yet Another Notifier",
+                        style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Settings items list
-            settingsItems.forEachIndexed { index, item ->
-                SettingsItemCard(
-                    item = item,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .focusRequester(focusRequesters[index])
-                        .onFocusChanged { focusState ->
-                            if (focusState.isFocused) {
-                                currentFocusedIndex = index
-                            }
-                        }
-                )
-            }
-
-            // App info section
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                        shape = RoundedCornerShape(8.dp)
+                    Text(
+                        text = "Version 1.0.0",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
-                    .padding(16.dp)
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    
-                    Column {
-                        Text(
-                            text = "Yet Another Notifier",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = "Version 1.0.0",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                        )
-                    }
                 }
             }
         }
+    }
 
 }
 
@@ -233,7 +250,7 @@ private fun SettingsItemCard(
                 modifier = Modifier.size(32.dp),
                 tint = MaterialTheme.colorScheme.primary
             )
-            
+
             // Content
             Column(
                 modifier = Modifier.weight(1f),
@@ -250,7 +267,7 @@ private fun SettingsItemCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                 )
             }
-            
+
             // Arrow indicator
             Icon(
                 imageVector = Icons.Default.KeyboardArrowRight,

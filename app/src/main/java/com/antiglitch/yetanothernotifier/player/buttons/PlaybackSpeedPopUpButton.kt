@@ -46,64 +46,68 @@ import androidx.media3.ui.compose.state.rememberPlaybackSpeedState
 
 @Composable
 internal fun PlaybackSpeedPopUpButton(
-  player: Player,
-  modifier: Modifier = Modifier,
-  speedSelection: List<Float> = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f),
+    player: Player,
+    modifier: Modifier = Modifier,
+    speedSelection: List<Float> = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f),
 ) {
-  val state = rememberPlaybackSpeedState(player)
-  var openDialog by remember { mutableStateOf(false) }
-  TextButton(onClick = { openDialog = true }, modifier = modifier, enabled = state.isEnabled) {
-    // TODO: look into TextMeasurer to ensure 1.1 and 2.2 occupy the same space
-    BasicText("%.1fx".format(state.playbackSpeed))
-  }
-  if (openDialog) {
-    BottomDialogOfChoices(
-      currentSpeed = state.playbackSpeed,
-      choices = speedSelection,
-      onDismissRequest = { openDialog = false },
-      onSelectChoice = state::updatePlaybackSpeed,
-    )
-  }
+    val state = rememberPlaybackSpeedState(player)
+    var openDialog by remember { mutableStateOf(false) }
+    TextButton(onClick = { openDialog = true }, modifier = modifier, enabled = state.isEnabled) {
+        // TODO: look into TextMeasurer to ensure 1.1 and 2.2 occupy the same space
+        BasicText("%.1fx".format(state.playbackSpeed))
+    }
+    if (openDialog) {
+        BottomDialogOfChoices(
+            currentSpeed = state.playbackSpeed,
+            choices = speedSelection,
+            onDismissRequest = { openDialog = false },
+            onSelectChoice = state::updatePlaybackSpeed,
+        )
+    }
 }
 
 @Composable
 private fun BottomDialogOfChoices(
-  currentSpeed: Float,
-  choices: List<Float>,
-  onDismissRequest: () -> Unit,
-  onSelectChoice: (Float) -> Unit,
+    currentSpeed: Float,
+    choices: List<Float>,
+    onDismissRequest: () -> Unit,
+    onSelectChoice: (Float) -> Unit,
 ) {
-  Dialog(
-    onDismissRequest = onDismissRequest,
-    properties = DialogProperties(usePlatformDefaultWidth = false),
-  ) {
-    val dialogWindowProvider = LocalView.current.parent as? DialogWindowProvider
-    dialogWindowProvider?.window?.let { window ->
-      window.setGravity(Gravity.BOTTOM) // Move down, by default dialogs are in the centre
-      window.setDimAmount(0f) // Remove dimmed background of ongoing playback
-    }
-
-    Box(modifier = Modifier.wrapContentSize().background(Color.LightGray)) {
-      Column(
-        modifier = Modifier.fillMaxWidth().wrapContentWidth(),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-      ) {
-        choices.forEach { speed ->
-          TextButton(
-            onClick = {
-              onSelectChoice(speed)
-              onDismissRequest()
-            }
-          ) {
-            var fontWeight = FontWeight(400)
-            if (speed == currentSpeed) {
-              fontWeight = FontWeight(1000)
-            }
-            Text("%.1fx".format(speed), fontWeight = fontWeight)
-          }
+    Dialog(
+        onDismissRequest = onDismissRequest,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        val dialogWindowProvider = LocalView.current.parent as? DialogWindowProvider
+        dialogWindowProvider?.window?.let { window ->
+            window.setGravity(Gravity.BOTTOM) // Move down, by default dialogs are in the centre
+            window.setDimAmount(0f) // Remove dimmed background of ongoing playback
         }
-      }
+
+        Box(modifier = Modifier
+            .wrapContentSize()
+            .background(Color.LightGray)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .wrapContentWidth(),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                choices.forEach { speed ->
+                    TextButton(
+                        onClick = {
+                            onSelectChoice(speed)
+                            onDismissRequest()
+                        }
+                    ) {
+                        var fontWeight = FontWeight(400)
+                        if (speed == currentSpeed) {
+                            fontWeight = FontWeight(1000)
+                        }
+                        Text("%.1fx".format(speed), fontWeight = fontWeight)
+                    }
+                }
+            }
+        }
     }
-  }
 }

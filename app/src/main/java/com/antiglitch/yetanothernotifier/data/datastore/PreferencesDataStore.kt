@@ -1,16 +1,21 @@
 package com.antiglitch.yetanothernotifier.data.datastore
 
 import android.content.Context
-import android.util.Log // Import Log
+import android.util.Log
 import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.*
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
+import androidx.datastore.preferences.core.floatPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.serializer
 
 val Context.preferencesDataStore: DataStore<Preferences> by preferencesDataStore(name = "app_preferences")
@@ -56,7 +61,11 @@ class PreferencesDataStoreImpl(
     override fun <T> get(key: String, defaultValue: T): Flow<T> {
         return dataStore.data
             .catch {
-                Log.e("PreferencesDataStore", "Error reading preferences for key $key, emitting empty", it) // Add logging for catch
+                Log.e(
+                    "PreferencesDataStore",
+                    "Error reading preferences for key $key, emitting empty",
+                    it
+                ) // Add logging for catch
                 emit(emptyPreferences())
             }
             .map { preferences ->
@@ -74,7 +83,11 @@ class PreferencesDataStoreImpl(
                                 json.decodeFromString(serializer, jsonString)
                             } catch (e: Exception) {
                                 // Log the error here
-                                Log.e("PreferencesDataStore", "Failed to deserialize key $key. Falling back to default. Error: ${e.message}", e)
+                                Log.e(
+                                    "PreferencesDataStore",
+                                    "Failed to deserialize key $key. Falling back to default. Error: ${e.message}",
+                                    e
+                                )
                                 defaultValue // Fallback to default on error
                             }
                         } else {

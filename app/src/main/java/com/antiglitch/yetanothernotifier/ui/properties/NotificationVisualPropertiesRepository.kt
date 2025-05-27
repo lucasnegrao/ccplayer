@@ -13,51 +13,51 @@ class NotificationVisualPropertiesRepository private constructor(
     keyPrefix = "notification_visual",
     defaultProperties = NotificationVisualProperties()
 ) {
-    
+
     // Dynamic property updaters using reflection
     fun updateDuration(duration: Long) {
         val validDuration = NotificationVisualProperties.validateDuration(duration)
-        updateProperty(NotificationVisualProperties::duration, validDuration) { 
-            copy(duration = it) 
+        updateProperty(NotificationVisualProperties::duration, validDuration) {
+            copy(duration = it)
         }
     }
 
     fun updateMargin(margin: Dp) {
         val validMargin = NotificationVisualProperties.validateMargin(margin)
-        updateProperty(NotificationVisualProperties::margin, validMargin) { 
-            copy(margin = it) 
+        updateProperty(NotificationVisualProperties::margin, validMargin) {
+            copy(margin = it)
         }
     }
 
     fun updateScale(scale: Float) {
         val validScale = NotificationVisualProperties.validateScale(scale)
-        updateProperty(NotificationVisualProperties::scale, validScale) { 
-            copy(scale = it) 
+        updateProperty(NotificationVisualProperties::scale, validScale) {
+            copy(scale = it)
         }
     }
 
     fun updateAspect(aspect: AspectRatio) {
-        updateProperty(NotificationVisualProperties::aspect, aspect) { 
-            copy(aspect = it) 
+        updateProperty(NotificationVisualProperties::aspect, aspect) {
+            copy(aspect = it)
         }
     }
 
     fun updateGravity(gravity: Gravity) {
-        updateProperty(NotificationVisualProperties::gravity, gravity) { 
-            copy(gravity = it) 
+        updateProperty(NotificationVisualProperties::gravity, gravity) {
+            copy(gravity = it)
         }
     }
 
     fun updateRoundedCorners(enabled: Boolean) {
-        updateProperty(NotificationVisualProperties::roundedCorners, enabled) { 
-            copy(roundedCorners = it) 
+        updateProperty(NotificationVisualProperties::roundedCorners, enabled) {
+            copy(roundedCorners = it)
         }
     }
 
     fun updateCornerRadius(radius: Dp) {
         val validRadius = NotificationVisualProperties.validateCornerRadius(radius)
-        updateProperty(NotificationVisualProperties::cornerRadius, validRadius) { 
-            copy(cornerRadius = it) 
+        updateProperty(NotificationVisualProperties::cornerRadius, validRadius) {
+            copy(cornerRadius = it)
         }
     }
 
@@ -70,9 +70,11 @@ class NotificationVisualPropertiesRepository private constructor(
 
     fun updateScreenDimensions(screenWidthDp: Float, screenHeightDp: Float) {
         val currentProperties = properties.value
-        android.util.Log.d("NotificationVisualPropertiesRepository", 
-            "Updating screen dimensions from ${currentProperties.screenWidthDp}x${currentProperties.screenHeightDp} to ${screenWidthDp}x${screenHeightDp}")
-        
+        android.util.Log.d(
+            "NotificationVisualPropertiesRepository",
+            "Updating screen dimensions from ${currentProperties.screenWidthDp}x${currentProperties.screenHeightDp} to ${screenWidthDp}x${screenHeightDp}"
+        )
+
         val newProperties = currentProperties.copy(
             screenWidthDp = screenWidthDp,
             screenHeightDp = screenHeightDp
@@ -93,7 +95,10 @@ class NotificationVisualPropertiesRepository private constructor(
 
         fun getInstance(context: Context): NotificationVisualPropertiesRepository {
             return INSTANCE ?: synchronized(this) {
-                INSTANCE ?: NotificationVisualPropertiesRepository(context.applicationContext).also { INSTANCE = it }
+                INSTANCE
+                    ?: NotificationVisualPropertiesRepository(context.applicationContext).also {
+                        INSTANCE = it
+                    }
             }
         }
     }

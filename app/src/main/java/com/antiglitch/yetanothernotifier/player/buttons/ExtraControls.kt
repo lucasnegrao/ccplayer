@@ -26,13 +26,13 @@ import androidx.media3.common.Player
 
 @Composable
 internal fun ExtraControls(player: Player, modifier: Modifier = Modifier) {
-  Row(
-    modifier = modifier,
-    horizontalArrangement = Arrangement.Center,
-    verticalAlignment = Alignment.CenterVertically,
-  ) {
-    PlaybackSpeedPopUpButton(player)
-    ShuffleButton(player)
-    RepeatButton(player)
-  }
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        PlaybackSpeedPopUpButton(player)
+        ShuffleButton(player)
+        RepeatButton(player)
+    }
 }

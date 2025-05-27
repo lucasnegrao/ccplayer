@@ -1,14 +1,18 @@
 package com.antiglitch.yetanothernotifier.ui.navigation
 
+import android.app.Activity
+import android.util.Log
 import androidx.activity.compose.BackHandler
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import com.antiglitch.yetanothernotifier.ui.fragments.SettingsFragment
-import com.antiglitch.yetanothernotifier.ui.fragments.NotificationPropertiesFragment
 import com.antiglitch.yetanothernotifier.ui.fragments.MqttPropertiesFragment
-import android.util.Log
-import android.app.Activity
+import com.antiglitch.yetanothernotifier.ui.fragments.NotificationPropertiesFragment
+import com.antiglitch.yetanothernotifier.ui.fragments.SettingsFragment
 
 enum class SettingsScreen {
     MAIN,
@@ -26,16 +30,16 @@ fun SettingsNavigation(
     // Move context access inside the composable
     val context = LocalContext.current
     val activity = context as? Activity
-    
+
     // Create the actual exit function inside the composable
     val actualOnExitSettings = onExitSettings ?: {
         Log.d("SettingsNavigation", "Sending app to background")
         activity?.moveTaskToBack(true)
     }
-    
+
     // Add composition logging
     Log.d("SettingsNavigation", "SettingsNavigation composed with initialScreen: $initialScreen")
-    
+
     var currentScreen by remember { mutableStateOf(initialScreen) }
 
     // Handle system back button navigation
@@ -67,24 +71,30 @@ fun SettingsNavigation(
                 modifier = modifier
             )
         }
-        
+
         SettingsScreen.NOTIFICATION_PROPERTIES -> {
             Log.d("SettingsNavigation", "Displaying NOTIFICATION_PROPERTIES screen")
             NotificationPropertiesFragment(
                 modifier = modifier,
                 onBackPressed = {
-                    Log.d("SettingsNavigation", "NotificationPropertiesFragment back pressed, navigating to MAIN")
+                    Log.d(
+                        "SettingsNavigation",
+                        "NotificationPropertiesFragment back pressed, navigating to MAIN"
+                    )
                     currentScreen = SettingsScreen.MAIN
                 }
             )
         }
-        
+
         SettingsScreen.MQTT_PROPERTIES -> {
             Log.d("SettingsNavigation", "Displaying MQTT_PROPERTIES screen")
             MqttPropertiesFragment(
                 modifier = modifier,
                 onBackPressed = {
-                    Log.d("SettingsNavigation", "MqttPropertiesFragment back pressed, navigating to MAIN")
+                    Log.d(
+                        "SettingsNavigation",
+                        "MqttPropertiesFragment back pressed, navigating to MAIN"
+                    )
                     currentScreen = SettingsScreen.MAIN
                 }
             )

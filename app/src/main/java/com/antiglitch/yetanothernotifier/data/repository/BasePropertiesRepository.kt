@@ -11,7 +11,6 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlin.reflect.KProperty1
-import kotlin.reflect.full.memberProperties
 
 abstract class BasePropertiesRepository<T : Any>(
     private val preferencesDataStore: PreferencesDataStore,
@@ -19,17 +18,23 @@ abstract class BasePropertiesRepository<T : Any>(
     private val defaultProperties: T
 ) {
     private val repositoryScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    
+
     protected val _properties = MutableStateFlow(defaultProperties)
     val properties: StateFlow<T> = _properties.asStateFlow()
 
     init {
-        android.util.Log.d("BasePropertiesRepository", "Initializing repository for $keyPrefix with defaults: $defaultProperties")
+        android.util.Log.d(
+            "BasePropertiesRepository",
+            "Initializing repository for $keyPrefix with defaults: $defaultProperties"
+        )
         loadProperties()
     }
 
     protected fun updateProperties(newProperties: T) {
-        android.util.Log.d("BasePropertiesRepository", "Updating properties for $keyPrefix from ${_properties.value} to $newProperties")
+        android.util.Log.d(
+            "BasePropertiesRepository",
+            "Updating properties for $keyPrefix from ${_properties.value} to $newProperties"
+        )
         _properties.value = newProperties
         saveProperties(newProperties)
     }
@@ -47,12 +52,15 @@ abstract class BasePropertiesRepository<T : Any>(
         android.util.Log.d("BasePropertiesRepository", "Starting to load properties for $keyPrefix")
         preferencesDataStore.get("${keyPrefix}_properties", defaultProperties)
             .onEach { loadedProperties ->
-                android.util.Log.d("BasePropertiesRepository", "Loaded properties for $keyPrefix: $loadedProperties")
+                android.util.Log.d(
+                    "BasePropertiesRepository",
+                    "Loaded properties for $keyPrefix: $loadedProperties"
+                )
                 _properties.value = loadedProperties
             }
             .launchIn(repositoryScope)
     }
-    
+
     // Public method to force reload properties from DataStore
     fun reloadProperties() {
         loadProperties()
@@ -61,11 +69,21 @@ abstract class BasePropertiesRepository<T : Any>(
     private fun saveProperties(properties: T) {
         repositoryScope.launch {
             try {
-                android.util.Log.d("BasePropertiesRepository", "Saving properties for $keyPrefix: $properties")
+                android.util.Log.d(
+                    "BasePropertiesRepository",
+                    "Saving properties for $keyPrefix: $properties"
+                )
                 preferencesDataStore.save("${keyPrefix}_properties", properties)
-                android.util.Log.d("BasePropertiesRepository", "Successfully saved properties for $keyPrefix")
+                android.util.Log.d(
+                    "BasePropertiesRepository",
+                    "Successfully saved properties for $keyPrefix"
+                )
             } catch (e: Exception) {
-                android.util.Log.e("BasePropertiesRepository", "Error saving properties for $keyPrefix", e)
+                android.util.Log.e(
+                    "BasePropertiesRepository",
+                    "Error saving properties for $keyPrefix",
+                    e
+                )
             }
         }
     }

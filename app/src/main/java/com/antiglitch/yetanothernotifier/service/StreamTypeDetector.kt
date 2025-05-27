@@ -3,15 +3,15 @@ package com.antiglitch.yetanothernotifier.service
 import android.content.Context
 import android.net.Uri
 import android.util.Log
+import androidx.core.net.toUri
 import com.yausername.youtubedl_android.YoutubeDL
-import com.yausername.youtubedl_android.YoutubeDLRequest
 import com.yausername.youtubedl_android.YoutubeDLException
+import com.yausername.youtubedl_android.YoutubeDLRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.regex.Pattern
-import androidx.core.net.toUri
 
 enum class StreamType {
     VIDEO,
@@ -23,11 +23,11 @@ enum class StreamType {
 
 object StreamTypeDetector {
     private const val TAG = "StreamTypeDetector"
-    
+
     // YoutubeDL initialization state
     private var isYoutubeDLInitialized = false
     private var youtubeDLInitializationFailed = false
-    
+
     // Cache for yt-dlp extractors
     private var cachedExtractors: Set<String>? = null
     private var extractorsCacheTime: Long = 0
@@ -60,14 +60,14 @@ object StreamTypeDetector {
     // Initialize YoutubeDL if not already done
     suspend fun initializeYoutubeDL(context: Context) {
         if (isYoutubeDLInitialized || youtubeDLInitializationFailed) return
-        
+
         withContext(Dispatchers.IO) {
             try {
                 Log.d(TAG, "Initializing YoutubeDL...")
                 YoutubeDL.getInstance().init(context)
                 isYoutubeDLInitialized = true
                 Log.d(TAG, "YoutubeDL initialized successfully")
-                
+
                 // Pre-cache extractors after initialization
                 cacheYtDlpExtractors()
             } catch (e: YoutubeDLException) {
@@ -96,9 +96,9 @@ object StreamTypeDetector {
                 Log.w(TAG, "YoutubeDL not initialized, returning empty extractors")
                 return@withContext emptySet()
             }
-            
+
             val currentTime = System.currentTimeMillis()
-            
+
             // Return cached extractors if still valid
             cachedExtractors?.let { extractors ->
                 if (currentTime - extractorsCacheTime < EXTRACTORS_CACHE_DURATION) {
@@ -106,23 +106,23 @@ object StreamTypeDetector {
                     return@withContext extractors
                 }
             }
-            
+
             // Fetch new extractors
             try {
                 Log.d(TAG, "Fetching yt-dlp extractors...")
                 val request = YoutubeDLRequest(emptyList())
                 request.addOption("--list-extractors")
                 val response = YoutubeDL.getInstance().execute(request)
-                
+
                 val extractors = response.out.split("\n")
                     .filter { it.isNotBlank() && !it.startsWith(" ") }
                     .map { it.trim().lowercase() }
                     .toSet()
-                
+
                 cachedExtractors = extractors
                 extractorsCacheTime = currentTime
                 Log.d(TAG, "Cached ${extractors.size} yt-dlp extractors")
-                
+
                 return@withContext extractors
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to fetch yt-dlp extractors", e)
@@ -130,7 +130,7 @@ object StreamTypeDetector {
             }
         }
     }
-    
+
     // Check if URL matches any yt-dlp extractor
     suspend fun isYtDlpSupported(url: String): Boolean {
         val extractors = getYtDlpExtractors()
@@ -148,7 +148,7 @@ object StreamTypeDetector {
             mainDomain.contains(extractorDomain) || extractorDomain.contains(mainDomain)
         }
     }
-    
+
     // Extract title from webpage HTML
     private suspend fun extractWebpageMetadata(url: String): Pair<String?, String?> {
         return withContext(Dispatchers.IO) {
@@ -157,30 +157,37 @@ object StreamTypeDetector {
                 connection.requestMethod = "GET"
                 connection.connectTimeout = 5000
                 connection.readTimeout = 5000
-                connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36")
-                
+                connection.setRequestProperty(
+                    "User-Agent",
+                    "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36"
+                )
+
                 val html = connection.inputStream.bufferedReader().use { it.readText() }
                 connection.disconnect()
-                
+
                 // Extract title
-                val titlePattern = Pattern.compile("<title[^>]*>([^<]+)</title>", Pattern.CASE_INSENSITIVE)
+                val titlePattern =
+                    Pattern.compile("<title[^>]*>([^<]+)</title>", Pattern.CASE_INSENSITIVE)
                 val titleMatcher = titlePattern.matcher(html)
                 val title = if (titleMatcher.find()) {
-                    titleMatcher.group(1)?.trim()?.let { 
+                    titleMatcher.group(1)?.trim()?.let {
                         // Decode HTML entities
                         it.replace("&amp;", "&")
-                          .replace("&lt;", "<")
-                          .replace("&gt;", ">")
-                          .replace("&quot;", "\"")
-                          .replace("&#39;", "'")
+                            .replace("&lt;", "<")
+                            .replace("&gt;", ">")
+                            .replace("&quot;", "\"")
+                            .replace("&#39;", "'")
                     }
                 } else null
-                
+
                 // Extract description
-                val descPattern = Pattern.compile("<meta[^>]*name=[\"']description[\"'][^>]*content=[\"']([^\"']*)[\"']", Pattern.CASE_INSENSITIVE)
+                val descPattern = Pattern.compile(
+                    "<meta[^>]*name=[\"']description[\"'][^>]*content=[\"']([^\"']*)[\"']",
+                    Pattern.CASE_INSENSITIVE
+                )
                 val descMatcher = descPattern.matcher(html)
                 val description = if (descMatcher.find()) descMatcher.group(1)?.trim() else null
-                
+
                 Log.d(TAG, "Extracted webpage metadata - Title: $title")
                 return@withContext Pair(title, description)
             } catch (e: Exception) {
@@ -194,7 +201,7 @@ object StreamTypeDetector {
     suspend fun detectStreamInfo(url: String, context: Context? = null): StreamInfo {
         // Initialize YoutubeDL if context is provided and not already initialized
         context?.let { initializeYoutubeDL(it) }
-        
+
         return withContext(Dispatchers.IO) {
             try {
                 val uri = Uri.parse(url)
@@ -222,7 +229,7 @@ object StreamTypeDetector {
                 // Step 2: Check if URL is supported by yt-dlp (before HEAD request)
                 if (url.startsWith("http://") || url.startsWith("https://")) {
                     val isYtDlpSupported = isYtDlpSupported(url)
-                    
+
                     if (isYtDlpSupported) {
                         Log.d(TAG, "URL matches yt-dlp extractor, trying yt-dlp resolution")
                         try {
@@ -287,15 +294,24 @@ object StreamTypeDetector {
                             }
 
                             contentType.contains("multipart/x-mixed-replace") -> {
-                                Log.d(TAG, "Detected as MJPEG (Content-Type: multipart/x-mixed-replace)")
+                                Log.d(
+                                    TAG,
+                                    "Detected as MJPEG (Content-Type: multipart/x-mixed-replace)"
+                                )
                                 return@withContext StreamInfo(
                                     streamType = StreamType.MJPEG,
                                     resolvedUrl = url
                                 )
                             }
 
-                            contentType.contains("image/jpeg") && url.contains("mjpeg", ignoreCase = true) -> {
-                                Log.d(TAG, "Detected as MJPEG (Content-Type: image/jpeg + mjpeg in URL)")
+                            contentType.contains("image/jpeg") && url.contains(
+                                "mjpeg",
+                                ignoreCase = true
+                            ) -> {
+                                Log.d(
+                                    TAG,
+                                    "Detected as MJPEG (Content-Type: image/jpeg + mjpeg in URL)"
+                                )
                                 return@withContext StreamInfo(
                                     streamType = StreamType.MJPEG,
                                     resolvedUrl = url
@@ -314,7 +330,7 @@ object StreamTypeDetector {
                             contentType.contains("text/html") -> {
                                 Log.d(TAG, "HTML detected, extracting webpage metadata")
                                 // Extract webpage metadata
-                                val (title, description) = extractWebpageMetadata(url)
+                                val (title, _) = extractWebpageMetadata(url)
                                 return@withContext StreamInfo(
                                     streamType = StreamType.WEBPAGE,
                                     resolvedUrl = url,
@@ -325,9 +341,10 @@ object StreamTypeDetector {
                             else -> {
                                 Log.d(TAG, "Unknown content type: $contentType")
                                 // For ambiguous content types, try MJPEG heuristics
-                                if (url.contains("camera", ignoreCase = true) || 
+                                if (url.contains("camera", ignoreCase = true) ||
                                     url.contains("mjpeg", ignoreCase = true) ||
-                                    url.contains("stream", ignoreCase = true)) {
+                                    url.contains("stream", ignoreCase = true)
+                                ) {
                                     Log.d(TAG, "Guessing MJPEG based on URL heuristics")
                                     return@withContext StreamInfo(
                                         streamType = StreamType.MJPEG,
@@ -343,7 +360,7 @@ object StreamTypeDetector {
                     // Step 4: If not yt-dlp supported and no clear content type, try extracting webpage metadata
                     if (!isYtDlpSupported) {
                         Log.d(TAG, "Not yt-dlp supported, trying webpage metadata extraction")
-                        val (title, description) = extractWebpageMetadata(url)
+                        val (title, _) = extractWebpageMetadata(url)
                         return@withContext StreamInfo(
                             streamType = StreamType.WEBPAGE,
                             resolvedUrl = url,

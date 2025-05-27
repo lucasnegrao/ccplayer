@@ -95,6 +95,7 @@ object PermissionUtil {
                         addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
                     }
                 }
+
                 else -> {
                     Intent().apply {
                         action = Settings.ACTION_APPLICATION_DETAILS_SETTINGS
@@ -109,7 +110,10 @@ object PermissionUtil {
             intent.removeExtra(Intent.EXTRA_TEXT)
 
             // Log the intent for debugging
-            android.util.Log.d("PermissionUtil", "Starting settings with action: ${intent.action} and data: ${intent.data}")
+            android.util.Log.d(
+                "PermissionUtil",
+                "Starting settings with action: ${intent.action} and data: ${intent.data}"
+            )
 
             activity.startActivity(intent)
         } catch (e: Exception) {
@@ -120,7 +124,11 @@ object PermissionUtil {
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 activity.startActivity(intent)
             } catch (e2: Exception) {
-                android.util.Log.e("PermissionUtil", "Failed to navigate to settings with fallback", e2)
+                android.util.Log.e(
+                    "PermissionUtil",
+                    "Failed to navigate to settings with fallback",
+                    e2
+                )
             }
         }
     }

@@ -10,8 +10,9 @@ object PropertyRanges {
     val SCALE = 0.1f..1.0f
     val CORNER_RADIUS = 0.dp..30.dp
     val MARGIN = 0.dp..64.dp // Add reasonable max margin
-    val TRANSPARENCY = 0.0f..1.0f // Range for transparency (0.0 = fully transparent, 1.0 = fully opaque)
-    
+    val TRANSPARENCY =
+        0.0f..1.0f // Range for transparency (0.0 = fully transparent, 1.0 = fully opaque)
+
     // Default step sizes for UI controls
     val DURATION_STEP = 500L
     val SCALE_STEP = 0.05f
@@ -39,25 +40,25 @@ data class NotificationVisualProperties(
     // Computed properties using stored screen dimensions
     val width: Dp
         get() = getSize(screenWidthDp, screenHeightDp).first
-    
+
     val height: Dp
         get() = getSize(screenWidthDp, screenHeightDp).second
-    
+
     fun getSize(screenWidthDp: Float, screenHeightDp: Float): Pair<Dp, Dp> {
         // Debug logging
         println("DEBUG: getSize called with screenWidth=$screenWidthDp, screenHeight=$screenHeightDp, scale=$scale, aspect=${aspect.ratio}")
-        
+
         // Determine if this is a portrait aspect ratio (height > width)
         val isPortraitRatio = aspect.ratio < 1.0f
-        
+
         val finalWidth: Float
         val finalHeight: Float
-        
+
         if (isPortraitRatio) {
             // For portrait ratios, scale applies to height
             val targetHeight = screenHeightDp * scale // Remove 0.9f multiplier
             val calculatedWidth = targetHeight * aspect.ratio
-            
+
             // Check if width fits (leave small margin for safety)
             val maxWidth = screenWidthDp * 0.95f
             if (calculatedWidth > maxWidth) {
@@ -71,7 +72,7 @@ data class NotificationVisualProperties(
             // For landscape ratios, scale applies to width
             val targetWidth = screenWidthDp * scale // Remove 0.9f multiplier
             val calculatedHeight = targetWidth / aspect.ratio
-            
+
             // Check if height fits (leave small margin for safety)
             val maxHeight = screenHeightDp * 0.95f
             if (calculatedHeight > maxHeight) {
@@ -82,28 +83,28 @@ data class NotificationVisualProperties(
                 finalHeight = calculatedHeight
             }
         }
-        
+
         println("DEBUG: Final dimensions: width=$finalWidth, height=$finalHeight")
         return finalWidth.dp to finalHeight.dp
     }
-    
+
     companion object {
         private const val DEFAULT_SCREEN_WIDTH_DP = 360f // Typical Android screen width
         private const val DEFAULT_SCREEN_HEIGHT_DP = 640f // Typical Android screen height
-        
+
         // Validation methods to ensure values stay within ranges
-        fun validateDuration(value: Long): Long = 
+        fun validateDuration(value: Long): Long =
             value.coerceIn(PropertyRanges.DURATION)
-        
+
         fun validateScale(value: Float): Float =
             value.coerceIn(PropertyRanges.SCALE)
-        
+
         fun validateCornerRadius(value: Dp): Dp =
             value.coerceIn(PropertyRanges.CORNER_RADIUS)
-        
+
         fun validateMargin(value: Dp): Dp =
             value.coerceIn(PropertyRanges.MARGIN)
-        
+
         fun validateTransparency(value: Float): Float =
             value.coerceIn(PropertyRanges.TRANSPARENCY)
     }
@@ -134,7 +135,7 @@ enum class Gravity(val displayName: String) {
     BOTTOM_START("Bottom Left"),
     BOTTOM_CENTER("Bottom Center"),
     BOTTOM_END("Bottom Right");
-    
+
     companion object {
         val gravityGrid = listOf(
             listOf(TOP_START, TOP_CENTER, TOP_END),
@@ -147,8 +148,15 @@ enum class Gravity(val displayName: String) {
 // Custom serializer for Dp
 @Serializable
 private class DpSerializer : kotlinx.serialization.KSerializer<Dp> {
-    override val descriptor = kotlinx.serialization.descriptors.PrimitiveSerialDescriptor("Dp", kotlinx.serialization.descriptors.PrimitiveKind.FLOAT)
-    override fun serialize(encoder: kotlinx.serialization.encoding.Encoder, value: Dp) = encoder.encodeFloat(value.value)
-    override fun deserialize(decoder: kotlinx.serialization.encoding.Decoder): Dp = decoder.decodeFloat().dp
+    override val descriptor = kotlinx.serialization.descriptors.PrimitiveSerialDescriptor(
+        "Dp",
+        kotlinx.serialization.descriptors.PrimitiveKind.FLOAT
+    )
+
+    override fun serialize(encoder: kotlinx.serialization.encoding.Encoder, value: Dp) =
+        encoder.encodeFloat(value.value)
+
+    override fun deserialize(decoder: kotlinx.serialization.encoding.Decoder): Dp =
+        decoder.decodeFloat().dp
 }
 

@@ -8,7 +8,7 @@ object MqttPropertyRanges {
     val KEEP_ALIVE_RANGE = 10..300 // seconds
     val CONNECTION_TIMEOUT_RANGE = 5..60 // seconds
     val QOS_RANGE = 0..2
-    
+
     // Default values
     const val DEFAULT_PORT = 1883
     const val DEFAULT_KEEP_ALIVE = 60
@@ -40,24 +40,26 @@ data class MqttProperties(
             EncryptionType.TLS -> "ssl://$serverHost:$serverPort"
             EncryptionType.WSS -> "wss://$serverHost:$serverPort"
         }
-    
+
     companion object {
         // Validation methods
-        fun validatePort(value: Int): Int = 
+        fun validatePort(value: Int): Int =
             value.coerceIn(MqttPropertyRanges.PORT_RANGE)
-        
+
         fun validateKeepAlive(value: Int): Int =
             value.coerceIn(MqttPropertyRanges.KEEP_ALIVE_RANGE)
-        
+
         fun validateConnectionTimeout(value: Int): Int =
             value.coerceIn(MqttPropertyRanges.CONNECTION_TIMEOUT_RANGE)
-        
+
         fun validateQos(value: Int): Int =
             value.coerceIn(MqttPropertyRanges.QOS_RANGE)
-        
+
         fun validateClientId(value: String): String =
-            if (value.isBlank()) "YANClient-${System.currentTimeMillis().toString().takeLast(8)}" else value
-        
+            if (value.isBlank()) "YANClient-${
+                System.currentTimeMillis().toString().takeLast(8)
+            }" else value
+
         fun validateTopic(value: String): String =
             value.trim().takeIf { it.isNotBlank() } ?: "yan/default"
     }

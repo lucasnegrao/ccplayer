@@ -2,31 +2,45 @@ package com.antiglitch.yetanothernotifier.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.input.key.*
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
-import androidx.compose.foundation.focusable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsFocusedAsState
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.IntOffset
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalTvMaterial3Api::class)
@@ -46,39 +60,43 @@ fun TvFriendlySlider(
 ) {
     // Calculate current progress percentage (0-1)
     val progress = (value - valueRange.start) / (valueRange.endInclusive - valueRange.start)
-    
+
     // Focus management
     val sliderInteractionSource = remember { MutableInteractionSource() }
     val isFocused = sliderInteractionSource.collectIsFocusedAsState()
     val sliderFocusRequester = remember { FocusRequester() }
-    
+
     // Track dimensions and handle measurements
     var trackWidth by remember { mutableStateOf(0f) }
     var trackWidthPx by remember { mutableStateOf(0) }
     val handleSizePx = with(LocalDensity.current) { 32.dp.toPx() }
-    
+
     // Track drag state
     var isDragging by remember { mutableStateOf(false) }
     var dragPointerPositionOnTrack by remember { mutableStateOf(0f) }
-    
+
     // Convert touch/pointer position to slider value
     val positionToValue = { position: Float ->
         val newProgress = (position / trackWidth).coerceIn(0f, 1f)
-        val exactValue = valueRange.start + newProgress * (valueRange.endInclusive - valueRange.start)
-        
+        val exactValue =
+            valueRange.start + newProgress * (valueRange.endInclusive - valueRange.start)
+
         if (stepSize > 0) {
             val steps = ((exactValue - valueRange.start) / stepSize).roundToInt()
-            (valueRange.start + steps * stepSize).coerceIn(valueRange.start, valueRange.endInclusive)
+            (valueRange.start + steps * stepSize).coerceIn(
+                valueRange.start,
+                valueRange.endInclusive
+            )
         } else {
             exactValue
         }
     }
-    
+
     // Convert absolute position to value (for track clicks)
     val absolutePositionToValue = { absoluteX: Float ->
         positionToValue(absoluteX)
     }
-    
+
     // Main slider container - OuterBox
     Box(
         modifier = modifier
@@ -127,7 +145,7 @@ fun TvFriendlySlider(
                         .clip(RoundedCornerShape(16.dp)) // Clip fill to track shape
                         .background(fillBackgroundColor)
                 )
-                
+
                 // VALUE TEXT: Numerical display in center of track
                 if (showValueInTrack) {
                     Text(
@@ -178,7 +196,7 @@ fun TvFriendlySlider(
                             .align(Alignment.Center)
                     )
                 }
-                
+
                 // HANDLE: Interactive draggable element
                 Box(
                     modifier = Modifier
@@ -190,16 +208,23 @@ fun TvFriendlySlider(
                                 when (keyEvent.key) {
                                     Key.DirectionRight -> {
                                         if (value < valueRange.endInclusive) {
-                                            onValueChange(minOf(value + stepSize, valueRange.endInclusive))
+                                            onValueChange(
+                                                minOf(
+                                                    value + stepSize,
+                                                    valueRange.endInclusive
+                                                )
+                                            )
                                         }
                                         true
                                     }
+
                                     Key.DirectionLeft -> {
                                         if (value > valueRange.start) {
                                             onValueChange(maxOf(value - stepSize, valueRange.start))
                                         }
                                         true
                                     }
+
                                     else -> false
                                 }
                             } else false
@@ -221,7 +246,8 @@ fun TvFriendlySlider(
                                 // Update the absolute pointer position on the track
                                 dragPointerPositionOnTrack += dragAmount.x
                                 // Coerce the position to be within track bounds
-                                val newPositionOnTrack = dragPointerPositionOnTrack.coerceIn(0f, trackWidth)
+                                val newPositionOnTrack =
+                                    dragPointerPositionOnTrack.coerceIn(0f, trackWidth)
                                 val newValue = positionToValue(newPositionOnTrack)
                                 onValueChange(newValue)
                             }

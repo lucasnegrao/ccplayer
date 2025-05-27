@@ -6,10 +6,8 @@ import android.os.Looper
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
-import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.C
-import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
@@ -51,7 +49,7 @@ class CustomMediaSessionConnector(
                 updateLegacyMediaSessionPlaybackState()
             }
         }
-        
+
         playerListener?.let { media3Session?.player?.addListener(it) }
     }
 
@@ -64,8 +62,9 @@ class CustomMediaSessionConnector(
         // Map Media3 player state to legacy PlaybackState
         val state: Int = when (player.playbackState) {
             Player.STATE_BUFFERING -> PlaybackStateCompat.STATE_BUFFERING
-            Player.STATE_READY -> 
+            Player.STATE_READY ->
                 if (player.isPlaying) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED
+
             Player.STATE_ENDED -> PlaybackStateCompat.STATE_STOPPED
             Player.STATE_IDLE -> PlaybackStateCompat.STATE_NONE
             else -> PlaybackStateCompat.STATE_NONE

@@ -16,7 +16,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import androidx.media3.session.MediaController as Media3MediaController
-import com.antiglitch.yetanothernotifier.service.StreamType
 
 interface MediaControllerCallback {
     fun onInitialized(success: Boolean)
@@ -32,7 +31,7 @@ interface MediaControllerInterface {
 }
 
 class MediaController(
-    private var context: Context, 
+    private var context: Context,
     private var callback: MediaControllerCallback
 ) : MediaControllerInterface {
 
@@ -108,6 +107,7 @@ class MediaController(
                         .setTag(StreamType.VIDEO)
                         .build()
                 }
+
                 StreamType.RTSP -> {
                     val mediaItemRTSP = MediaItem.fromUri(streamInfo.resolvedUrl!!)
                     mediaItem = mediaItemRTSP.buildUpon()
@@ -119,6 +119,7 @@ class MediaController(
                         )
                         .build()
                 }
+
                 StreamType.MJPEG, StreamType.UNKNOWN, StreamType.WEBPAGE -> {
                     mediaItem = MediaItem.Builder()
                         .setUri(streamInfo.resolvedUrl)
@@ -133,7 +134,7 @@ class MediaController(
                         .build()
                 }
             }
-            
+
             mediaItem?.let { item ->
                 mediaController?.apply {
                     clearMediaItems()

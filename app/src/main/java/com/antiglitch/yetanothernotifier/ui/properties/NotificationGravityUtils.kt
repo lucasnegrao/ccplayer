@@ -4,9 +4,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.IntOffset
-import kotlin.math.roundToInt
 
 enum class Orientation { Horizontal, Vertical }
 
@@ -42,6 +39,7 @@ fun getOppositeOrientation(gravity: Gravity): Orientation {
     return when (gravity) {
         Gravity.TOP_CENTER,
         Gravity.BOTTOM_CENTER -> Orientation.Vertical
+
         Gravity.CENTER -> Orientation.Horizontal // fallback
         else -> Orientation.Horizontal
     }

@@ -36,16 +36,18 @@ import androidx.media3.common.Player
  */
 @Composable
 internal fun MinimalControls(player: Player, modifier: Modifier = Modifier) {
-  val graySemiTransparentBackground = Color.Gray.copy(alpha = 0.1f)
-  val modifierForIconButton =
-    modifier.size(80.dp).background(graySemiTransparentBackground, CircleShape)
-  Row(
-    modifier = modifier.fillMaxWidth(),
-    horizontalArrangement = Arrangement.SpaceEvenly,
-    verticalAlignment = Alignment.CenterVertically,
-  ) {
-    PreviousButton(player, modifierForIconButton)
-    PlayPauseButton(player, modifierForIconButton)
-    NextButton(player, modifierForIconButton)
-  }
+    val graySemiTransparentBackground = Color.Gray.copy(alpha = 0.1f)
+    val modifierForIconButton =
+        modifier
+            .size(80.dp)
+            .background(graySemiTransparentBackground, CircleShape)
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        PreviousButton(player, modifierForIconButton)
+        PlayPauseButton(player, modifierForIconButton)
+        NextButton(player, modifierForIconButton)
+    }
 }

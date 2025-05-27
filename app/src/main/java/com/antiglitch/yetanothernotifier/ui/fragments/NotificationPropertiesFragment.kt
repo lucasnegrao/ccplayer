@@ -1,32 +1,47 @@
 package com.antiglitch.yetanothernotifier.ui.fragments
 
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 //import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import android.util.Log
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import androidx.tv.material3.ExperimentalTvMaterial3Api
-import androidx.tv.material3.*
-import com.antiglitch.yetanothernotifier.ui.components.TvFriendlySlider
-import com.antiglitch.yetanothernotifier.ui.components.TvFriendlyChipsSelect
-import androidx.compose.foundation.shape.RoundedCornerShape // Import for RoundedCornerShape
-import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.foundation.focusable
-import androidx.compose.ui.focus.FocusRequester // Added import
-import androidx.compose.ui.focus.focusRequester // Added import
-import androidx.compose.ui.focus.onFocusChanged // Added import
-import kotlinx.coroutines.launch
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import android.util.Log
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import com.antiglitch.yetanothernotifier.ui.properties.*
-import androidx.compose.foundation.background
+import androidx.compose.ui.unit.dp
+import androidx.tv.material3.ButtonDefaults
+import androidx.tv.material3.ExperimentalTvMaterial3Api
+import androidx.tv.material3.Icon
+import androidx.tv.material3.IconButton
+import androidx.tv.material3.LocalContentColor
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Text
+import com.antiglitch.yetanothernotifier.ui.components.TvFriendlyChipsSelect
+import com.antiglitch.yetanothernotifier.ui.components.TvFriendlySlider
 import com.antiglitch.yetanothernotifier.ui.components.TvFriendlySwitch
+import com.antiglitch.yetanothernotifier.ui.properties.AspectRatio
+import com.antiglitch.yetanothernotifier.ui.properties.Gravity
+import com.antiglitch.yetanothernotifier.ui.properties.NotificationVisualPropertiesRepository
+import com.antiglitch.yetanothernotifier.ui.properties.PropertyRanges
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -40,7 +55,7 @@ fun NotificationPropertiesFragment(
     val properties by repository.properties.collectAsState()
     val scrollState = rememberScrollState()
     var isGravitySelectorTrigger by remember { mutableStateOf(false) }
-    val coroutineScope = rememberCoroutineScope()
+    rememberCoroutineScope()
 
     // Scroll to top and request initial focus on launch
 
@@ -58,10 +73,12 @@ fun NotificationPropertiesFragment(
     ) {
         // Add a back button at the top
         Row(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
-        )   {
+        ) {
             IconButton(
                 onClick = {
                     Log.d("MqttPropertiesFragment", "Back button clicked, calling onBackPressed")
@@ -78,7 +95,7 @@ fun NotificationPropertiesFragment(
                 )
 
             }
-            
+
             Text(
                 text = "Properties",
                 style = MaterialTheme.typography.headlineMedium
@@ -104,18 +121,17 @@ fun NotificationPropertiesFragment(
             )
             TvFriendlySlider(
                 modifier = Modifier
-                    .focusRequester(focusRequester)
-                ,
+                    .focusRequester(focusRequester),
                 value = properties.duration.toFloat(),
                 onValueChange = { repository.updateDuration(it.toLong()) },
                 valueRange = 1000f..10000f,
                 stepSize = 500f
             )
         }
-    LaunchedEffect(Unit) {
+        LaunchedEffect(Unit) {
             focusRequester.requestFocus()
-        
-    }
+
+        }
         // Scale Control
         // Replaced Card with a Column having a background modifier
         Column(
@@ -177,8 +193,10 @@ fun NotificationPropertiesFragment(
                     title = "Gravity",
                     options = Gravity.values().toList(),
                     selectedOption = properties.gravity,
-                    onOptionSelected = {  isGravitySelectorTrigger = true
-                        repository.updateGravity(it)  },
+                    onOptionSelected = {
+                        isGravitySelectorTrigger = true
+                        repository.updateGravity(it)
+                    },
                     optionLabel = { it.displayName }
                 )
             }
@@ -244,7 +262,8 @@ fun NotificationPropertiesFragment(
             TvFriendlySlider(
                 value = properties.margin.value,
                 onValueChange = {
-                    val newMargin = it.dp // No need for a hard-coded range in properties, just clamp here if needed
+                    val newMargin =
+                        it.dp // No need for a hard-coded range in properties, just clamp here if needed
                     repository.updateMargin(newMargin)
                 },
                 valueRange = 0f..64f, // Simple and direct, 0 to 64 dp

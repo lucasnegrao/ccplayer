@@ -4,7 +4,6 @@ import android.app.Activity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -12,9 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -24,13 +20,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
@@ -50,10 +46,10 @@ fun PermissionDialog(
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
-    var permissionGranted by remember { 
-        mutableStateOf(PermissionUtil.checkPermission(context, permissionType)) 
+    var permissionGranted by remember {
+        mutableStateOf(PermissionUtil.checkPermission(context, permissionType))
     }
-    
+
     // Observe permission changes when returning from settings
     PermissionUtil.ObservePermission(
         permissionType = permissionType,
@@ -65,7 +61,7 @@ fun PermissionDialog(
             }
         }
     )
-    
+
     // If permission is already granted, call the callback immediately
     DisposableEffect(permissionGranted) {
         if (permissionGranted) {
@@ -73,17 +69,18 @@ fun PermissionDialog(
         }
         onDispose { }
     }
-    
+
     // Only show the dialog if permission is not granted
     if (!permissionGranted) {
         // Create a focus requester for the settings button
         val buttonFocusRequester = remember { FocusRequester() }
-        
+
         // Get screen width to calculate dialog width
         val configuration = LocalConfiguration.current
         val screenWidth = configuration.screenWidthDp.dp
-        val dialogWidth = (screenWidth * 0.5f).coerceAtMost(500.dp) // 50% of screen width, max 500dp
-        
+        val dialogWidth =
+            (screenWidth * 0.5f).coerceAtMost(500.dp) // 50% of screen width, max 500dp
+
         // Request focus when dialog appears
         LaunchedEffect(Unit) {
             try {
@@ -93,7 +90,7 @@ fun PermissionDialog(
                 android.util.Log.e("PermissionDialog", "Error requesting focus", e)
             }
         }
-        
+
         Dialog(
             onDismissRequest = onDismiss,
             properties = androidx.compose.ui.window.DialogProperties(
@@ -121,9 +118,9 @@ fun PermissionDialog(
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
                 )
-                
+
                 Spacer(modifier = Modifier.height(16.dp))
-                
+
                 // Description - avoid selectable text that might trigger clipboard
                 Text(
                     text = description,
@@ -131,9 +128,9 @@ fun PermissionDialog(
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
                 )
-                
+
                 Spacer(modifier = Modifier.height(32.dp))
-                
+
                 // Buttons - vertical arrangement to avoid overlap on narrow screens
                 Column(
                     modifier = Modifier.fillMaxWidth(),
@@ -146,7 +143,11 @@ fun PermissionDialog(
                                 try {
                                     PermissionUtil.navigateToSettings(activity, permissionType)
                                 } catch (e: Exception) {
-                                    android.util.Log.e("PermissionDialog", "Error navigating to settings", e)
+                                    android.util.Log.e(
+                                        "PermissionDialog",
+                                        "Error navigating to settings",
+                                        e
+                                    )
                                 }
                             },
                             modifier = Modifier
@@ -156,7 +157,7 @@ fun PermissionDialog(
                             Text("Open Settings")
                         }
                     }
-                    
+
                     OutlinedButton(
                         onClick = onDismiss,
                         modifier = Modifier.fillMaxWidth(0.8f)

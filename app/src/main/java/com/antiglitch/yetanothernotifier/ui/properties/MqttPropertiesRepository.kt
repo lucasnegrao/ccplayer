@@ -12,97 +12,97 @@ class MqttPropertiesRepository private constructor(
     keyPrefix = "mqtt",
     defaultProperties = MqttProperties()
 ) {
-    
+
     // Individual property updaters with validation
     fun updateEnabled(enabled: Boolean) {
-        updateProperty(MqttProperties::enabled, enabled) { 
-            copy(enabled = it) 
+        updateProperty(MqttProperties::enabled, enabled) {
+            copy(enabled = it)
         }
     }
 
     fun updateServerHost(host: String) {
         val validHost = host.trim().takeIf { it.isNotBlank() } ?: "broker.hivemq.com"
-        updateProperty(MqttProperties::serverHost, validHost) { 
-            copy(serverHost = it) 
+        updateProperty(MqttProperties::serverHost, validHost) {
+            copy(serverHost = it)
         }
     }
 
     fun updateServerPort(port: Int) {
         val validPort = MqttProperties.validatePort(port)
-        updateProperty(MqttProperties::serverPort, validPort) { 
-            copy(serverPort = it) 
+        updateProperty(MqttProperties::serverPort, validPort) {
+            copy(serverPort = it)
         }
     }
 
     fun updateClientId(clientId: String) {
         val validClientId = MqttProperties.validateClientId(clientId)
-        updateProperty(MqttProperties::clientId, validClientId) { 
-            copy(clientId = it) 
+        updateProperty(MqttProperties::clientId, validClientId) {
+            copy(clientId = it)
         }
     }
 
     fun updateUsername(username: String) {
-        updateProperty(MqttProperties::username, username.trim()) { 
-            copy(username = it) 
+        updateProperty(MqttProperties::username, username.trim()) {
+            copy(username = it)
         }
     }
 
     fun updatePassword(password: String) {
-        updateProperty(MqttProperties::password, password) { 
-            copy(password = it) 
+        updateProperty(MqttProperties::password, password) {
+            copy(password = it)
         }
     }
 
     fun updateSubscribeTopic(topic: String) {
         val validTopic = MqttProperties.validateTopic(topic)
-        updateProperty(MqttProperties::subscribeTopic, validTopic) { 
-            copy(subscribeTopic = it) 
+        updateProperty(MqttProperties::subscribeTopic, validTopic) {
+            copy(subscribeTopic = it)
         }
     }
 
     fun updatePublishTopic(topic: String) {
         val validTopic = MqttProperties.validateTopic(topic)
-        updateProperty(MqttProperties::publishTopic, validTopic) { 
-            copy(publishTopic = it) 
+        updateProperty(MqttProperties::publishTopic, validTopic) {
+            copy(publishTopic = it)
         }
     }
 
     fun updateAutoReconnect(autoReconnect: Boolean) {
-        updateProperty(MqttProperties::autoReconnect, autoReconnect) { 
-            copy(autoReconnect = it) 
+        updateProperty(MqttProperties::autoReconnect, autoReconnect) {
+            copy(autoReconnect = it)
         }
     }
 
     fun updateCleanSession(cleanSession: Boolean) {
-        updateProperty(MqttProperties::cleanSession, cleanSession) { 
-            copy(cleanSession = it) 
+        updateProperty(MqttProperties::cleanSession, cleanSession) {
+            copy(cleanSession = it)
         }
     }
 
     fun updateKeepAlive(keepAlive: Int) {
         val validKeepAlive = MqttProperties.validateKeepAlive(keepAlive)
-        updateProperty(MqttProperties::keepAlive, validKeepAlive) { 
-            copy(keepAlive = it) 
+        updateProperty(MqttProperties::keepAlive, validKeepAlive) {
+            copy(keepAlive = it)
         }
     }
 
     fun updateConnectionTimeout(timeout: Int) {
         val validTimeout = MqttProperties.validateConnectionTimeout(timeout)
-        updateProperty(MqttProperties::connectionTimeout, validTimeout) { 
-            copy(connectionTimeout = it) 
+        updateProperty(MqttProperties::connectionTimeout, validTimeout) {
+            copy(connectionTimeout = it)
         }
     }
 
     fun updateQos(qos: QosLevel) {
-        updateProperty(MqttProperties::qos, qos) { 
-            copy(qos = it) 
+        updateProperty(MqttProperties::qos, qos) {
+            copy(qos = it)
         }
     }
 
     fun updateEncryption(encryption: EncryptionType) {
-        updateProperty(MqttProperties::encryption, encryption) { 
+        updateProperty(MqttProperties::encryption, encryption) {
             // Auto-update port when encryption type changes
-            copy(encryption = it, serverPort = it.defaultPort) 
+            copy(encryption = it, serverPort = it.defaultPort)
         }
     }
 
@@ -125,7 +125,9 @@ class MqttPropertiesRepository private constructor(
 
         fun getInstance(context: Context): MqttPropertiesRepository {
             return INSTANCE ?: synchronized(this) {
-                INSTANCE ?: MqttPropertiesRepository(context.applicationContext).also { INSTANCE = it }
+                INSTANCE ?: MqttPropertiesRepository(context.applicationContext).also {
+                    INSTANCE = it
+                }
             }
         }
     }

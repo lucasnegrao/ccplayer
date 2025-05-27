@@ -1,5 +1,7 @@
 package com.antiglitch.yetanothernotifier.ui.components
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,41 +28,21 @@ fun NotificationCard(
     val repository = NotificationVisualPropertiesRepository.getInstance(context)
     val properties by repository.properties.collectAsState()
 
-
-        Card(
-            modifier = Modifier
-                .size(
-                    width = properties.width,
-                    height = properties.height
-                ),
-            shape = CardDefaults.shape(
+    Column(
+        modifier = Modifier
+            .size(
+                width = properties.width,
+                height = properties.height
+            )
+            .background(
+                color = MaterialTheme.colorScheme.surface,
                 shape = if (properties.roundedCorners) {
                     RoundedCornerShape(properties.cornerRadius)
                 } else {
                     RectangleShape
                 }
-            ),
-            onClick = {
-                // Handle click event if needed
-            },
-            border = CardDefaults.border()
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(12.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Text(
-                    text = "Notification",
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Text(
-                    text = "${properties.duration}ms",
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
-        }
-
+            )
+    ) {
+        // Empty column - all content removed
+    }
 }

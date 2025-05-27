@@ -1,5 +1,8 @@
 package com.antiglitch.yetanothernotifier.ui.components
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,6 +23,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.MainScope
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -38,6 +43,35 @@ fun <T> TvFriendlyChipsSelect(
     val chipFocusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     
+    // Helper functions to avoid code duplication
+    val handleMainChipToggle: () -> Unit = {
+        expanded = !expanded
+        if (expanded) {
+            MainScope().launch {
+                delay(100)
+                focusManager.moveFocus(FocusDirection.Down)
+            }
+        } else {
+            chipFocusRequester.requestFocus()
+        }
+    }
+    
+    val handleOptionSelection: (T) -> Unit = { option: T ->
+        if (multiSelect && onOptionsSelected != null) {
+            val isSelected = selectedOptions.contains(option)
+            val newSelection = if (isSelected) {
+                selectedOptions - option
+            } else {
+                selectedOptions + option
+            }
+            onOptionsSelected(newSelection)
+        } else {
+            onOptionSelected(option)
+            expanded = false
+            chipFocusRequester.requestFocus()
+        }
+    }
+
     // Just use a simple Column with padding
     Column(
         modifier = modifier
@@ -60,28 +94,24 @@ fun <T> TvFriendlyChipsSelect(
             // Expandable chip - this should be the primary focus
             FilterChip(
                 selected = true,
-                onClick = { 
-                    // Toggle expanded state
-                    expanded = !expanded
-                    if (expanded) {
-                        // Move focus down when expanding
-                        MainScope().launch {
-                            delay(100) // Ensure list is composed
-                            focusManager.moveFocus(FocusDirection.Down)
-                        }
-                    } else {
-                        // Ensure focus returns to the chip itself when collapsing
-                        chipFocusRequester.requestFocus()
-                    }
-                },
+                onClick = handleMainChipToggle,
                 // Use proper TV-friendly focus settings
-                modifier = Modifier.focusRequester(chipFocusRequester),
-                // colors = FilterChipDefaults.colors(
-                //     containerColor = MaterialTheme.colorScheme.surface, // Default non-selected state
-                //     selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer, // Color when selected (always true for this chip)
-                //     contentColor = MaterialTheme.colorScheme.onSurface,
-                //     selectedContentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                // ),
+                modifier = Modifier
+                    .focusRequester(chipFocusRequester)
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onTap = {
+                                chipFocusRequester.requestFocus()
+                                handleMainChipToggle()
+                            }
+                        )
+                    },
+                colors = FilterChipDefaults.colors(
+                    containerColor = MaterialTheme.colorScheme.surface, // Default non-selected state
+                    selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer, // Color when selected (always true for this chip)
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    selectedContentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                ),
            
             ) {
                 Row(
@@ -136,30 +166,23 @@ fun <T> TvFriendlyChipsSelect(
                             // Make sure each chip is properly focusable
                             FilterChip(
                                 selected = isSelected,
-                                onClick = {
-                                    if (multiSelect && onOptionsSelected != null) {
-                                        val newSelection = if (isSelected) {
-                                            selectedOptions - option
-                                        } else {
-                                            selectedOptions + option
-                                        }
-                                        onOptionsSelected(newSelection)
-                                    } else {
-                                        onOptionSelected(option)
-                                        expanded = false
-                                        // Return focus to main chip after selection
-                                        chipFocusRequester.requestFocus()
-                                    }
-                                },
-                                // Improved focus and selection visuals
-                                modifier = Modifier.weight(1f),
+                                onClick = { handleOptionSelection(option) },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .pointerInput(option) {
+                                        detectTapGestures(
+                                            onTap = {
+                                                // Request focus first, then handle selection
+                                                handleOptionSelection(option)
+                                            }
+                                        )
+                                    },
                                 colors = FilterChipDefaults.colors(
                                     containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                    // selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                    // contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    // selectedContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    selectedContentColor = MaterialTheme.colorScheme.onPrimaryContainer
                                 ),
-
                             ) {
                                 // Centered, single-line text
                                 Text(
@@ -187,7 +210,13 @@ fun <T> TvFriendlyChipsSelect(
                 
                 Button(
                     onClick = { expanded = false },
-                    modifier = Modifier.align(Alignment.End)
+                    modifier = Modifier
+                        .align(Alignment.End)
+                        .pointerInput(Unit) {
+                            detectTapGestures(
+                                onTap = { expanded = false }
+                            )
+                        }
                 ) {
                     Text("Done")
                 }
@@ -195,8 +224,9 @@ fun <T> TvFriendlyChipsSelect(
         }
     }
     
-    // Request focus on the chip when component is first displayed
-    LaunchedEffect(Unit) {
-        chipFocusRequester.requestFocus()
-    }
+    // // Request focus on the chip when component is first displayed
+    // LaunchedEffect(Unit) {
+    //     chipFocusRequester.requestFocus()
+    //     isInitialized = true
+    // }
 }

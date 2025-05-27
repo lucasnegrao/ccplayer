@@ -56,7 +56,10 @@ fun TvFriendlySlider(
     var trackWidth by remember { mutableStateOf(0f) }
     var trackWidthPx by remember { mutableStateOf(0) }
     val handleSizePx = with(LocalDensity.current) { 32.dp.toPx() }
-    val halfHandleSizePx = handleSizePx / 2
+    
+    // Track drag state
+    var isDragging by remember { mutableStateOf(false) }
+    var dragPointerPositionOnTrack by remember { mutableStateOf(0f) }
     
     // Convert touch/pointer position to slider value
     val positionToValue = { position: Float ->
@@ -71,6 +74,11 @@ fun TvFriendlySlider(
         }
     }
     
+    // Convert absolute position to value (for track clicks)
+    val absolutePositionToValue = { absoluteX: Float ->
+        positionToValue(absoluteX)
+    }
+    
     // Main slider container - OuterBox
     Box(
         modifier = modifier
@@ -82,8 +90,8 @@ fun TvFriendlySlider(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(32.dp) // Visual height of the track
-                .clip(RoundedCornerShape(16.dp)) // Clip the track and its fill
+                .height(32.dp)
+                .clip(RoundedCornerShape(16.dp))
                 .background(surfaceColor)
                 .onGloballyPositioned {
                     trackWidth = it.size.width.toFloat()
@@ -93,7 +101,15 @@ fun TvFriendlySlider(
                     width = if (isFocused.value) 2.dp else 0.dp,
                     color = if (isFocused.value) MaterialTheme.colorScheme.primary else surfaceColor,
                     shape = RoundedCornerShape(16.dp)
-                ),
+                )
+                // Add click support to the entire track
+                .pointerInput(Unit) {
+                    detectTapGestures { offset ->
+                        val newValue = absolutePositionToValue(offset.x)
+                        onValueChange(newValue)
+                        sliderFocusRequester.requestFocus()
+                    }
+                },
             contentAlignment = Alignment.CenterStart
         ) {
             if (trackWidthPx > 0) {
@@ -126,7 +142,6 @@ fun TvFriendlySlider(
         }
 
         // Handle components are children of OuterBox, sibling to InnerBox (track)
-        // This prevents them from being clipped by InnerBox's height/clip.
         if (trackWidthPx > 0) {
             // Calculate the target left edge for the 32.dp handle
             val adjustedTrackWidth = maxOf(trackWidthPx, handleSizePx.toInt())
@@ -189,17 +204,25 @@ fun TvFriendlySlider(
                                 }
                             } else false
                         }
-                        // Add drag and tap support for mouse/touch
+                        // Fix drag calculation - track absolute position
                         .pointerInput(Unit) {
-                            detectTapGestures { offset ->
-                                val newValue = positionToValue(offset.x)
-                                onValueChange(newValue)
-                            }
-                        }
-                        .pointerInput(Unit) {
-                            detectDragGestures { change, dragAmount ->
+                            detectDragGestures(
+                                onDragStart = { offset ->
+                                    sliderFocusRequester.requestFocus()
+                                    isDragging = true
+                                    // Calculate the initial absolute pointer position on the track
+                                    dragPointerPositionOnTrack = handleTargetLeftEdgePx + offset.x
+                                },
+                                onDragEnd = {
+                                    isDragging = false
+                                }
+                            ) { change, dragAmount ->
                                 change.consume()
-                                val newValue = positionToValue(change.position.x)
+                                // Update the absolute pointer position on the track
+                                dragPointerPositionOnTrack += dragAmount.x
+                                // Coerce the position to be within track bounds
+                                val newPositionOnTrack = dragPointerPositionOnTrack.coerceIn(0f, trackWidth)
+                                val newValue = positionToValue(newPositionOnTrack)
                                 onValueChange(newValue)
                             }
                         }

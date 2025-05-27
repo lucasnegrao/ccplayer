@@ -26,9 +26,7 @@ fun NotificationCard(
     val repository = NotificationVisualPropertiesRepository.getInstance(context)
     val properties by repository.properties.collectAsState()
 
-    Box(
-        modifier = modifier
-    ) {
+
         Card(
             modifier = Modifier
                 .size(
@@ -64,5 +62,5 @@ fun NotificationCard(
                 )
             }
         }
-    }
+
 }

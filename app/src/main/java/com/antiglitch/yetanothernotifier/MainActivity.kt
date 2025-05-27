@@ -122,15 +122,5 @@ fun NotificationPropertiesScreen() {
                 )
                 .padding(8.dp)
         )
-        
-        // Add button to start overlay service
-        Button(
-            onClick = { NotificationOverlayService.startService(context) },
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 16.dp)
-        ) {
-            Text("Show Persistent Notification")
-        }
     }
 }

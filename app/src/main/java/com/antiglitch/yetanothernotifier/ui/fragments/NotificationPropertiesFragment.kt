@@ -10,17 +10,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.*
-import androidx.tv.material3.Button
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Card // Keep this for inner cards
 import androidx.tv.material3.CardDefaults // Keep this for inner cards
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.ui.graphics.Color
-import androidx.tv.material3.Icon
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.res.painterResource
-import com.antiglitch.yetanothernotifier.R
 import com.antiglitch.yetanothernotifier.ui.properties.*
 import com.antiglitch.yetanothernotifier.ui.components.TvFriendlySlider
 import com.antiglitch.yetanothernotifier.ui.components.TvFriendlyChipsSelect
@@ -43,20 +36,16 @@ fun NotificationPropertiesFragment(
     val properties by repository.properties.collectAsState()
     val firstContentFocusRequester = remember { FocusRequester() } // Create FocusRequester
     val scrollState = rememberScrollState() // Hoist ScrollState
-    val coroutineScope = rememberCoroutineScope()
-
-    // Listen to every recomposition and handle scrolling
-    SideEffect {
-        firstContentFocusRequester.requestFocus()
-        coroutineScope.launch {
-            scrollState.scrollTo(0)
-        }
-    }
+    var isGravitySelectorTrigger by remember { mutableStateOf(false) }
 
     // Scroll to top and request initial focus on launch
     LaunchedEffect(Unit) {
-        scrollState.scrollTo(0)
-        firstContentFocusRequester.requestFocus() // Add this line
+        if (!isGravitySelectorTrigger) {
+            firstContentFocusRequester.requestFocus()
+                scrollState.scrollTo(0)
+        } else {
+            isGravitySelectorTrigger = false
+        }
     }
 
     Card( // Use androidx.tv.material3.Card for the outer container
@@ -68,11 +57,9 @@ fun NotificationPropertiesFragment(
             .focusable(true)
         ,
         shape = CardDefaults.shape(
-            shape = if (properties.roundedCorners) {
-                RoundedCornerShape(properties.cornerRadius)
-            } else {
-                RectangleShape
-            }
+                RoundedCornerShape(16.dp)
+
+            
         ),
         colors = CardDefaults.colors(
             containerColor = MaterialTheme.colorScheme.inverseSurface
@@ -177,7 +164,8 @@ fun NotificationPropertiesFragment(
                         title = "Gravity",
                         options = Gravity.values().toList(),
                         selectedOption = properties.gravity,
-                        onOptionSelected = { repository.updateGravity(it) },
+                        onOptionSelected = {  isGravitySelectorTrigger = true
+                            repository.updateGravity(it)  },
                         optionLabel = { it.displayName }
                     )
                 }

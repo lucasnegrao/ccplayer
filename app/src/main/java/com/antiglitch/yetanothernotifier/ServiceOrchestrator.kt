@@ -119,16 +119,16 @@ class ServiceOrchestrator private constructor(context: Context) {
                 
                 // Step 3: Initialize MediaController (before message handling service)
                 initializeMediaController(context)
-                
-                // Step 4: Initialize MQTT service
-                initializeMqttService(context)
+            
                 
                 // Step 5: Update screen dimensions in repository
                 updateScreenDimensionsInRepository()
                 
                 // Step 6: Initialize overlay service (after MediaController is ready)
                 initializeOverlayService(context)
-                
+                    
+                // Step 4: Initialize MQTT service
+                initializeMqttService(context)
                 // Step 7: Start monitoring MQTT enable/disable changes
                 startMqttMonitoring()
                 
@@ -248,6 +248,22 @@ class ServiceOrchestrator private constructor(context: Context) {
         
         // Initialize service
         mqttService?.initialize()
+
+        // Add MQTT connection callback to publish discovery
+        mqttService?.addOnConnectCallback {
+            Log.d(TAG, "MQTT connected, publishing HA discovery")
+            homeAssistantDiscovery?.apply {
+                initialize()
+                publishDiscovery()
+                publishAvailability(true)
+            }
+        }
+
+        // Add MQTT disconnection callback to handle availability
+        mqttService?.addOnDisconnectCallback {
+            Log.d(TAG, "MQTT disconnected")
+            homeAssistantDiscovery?.publishAvailability(false)
+        }
         
         // Register MQTT message listeners for different command types
         mqttService?.apply {
@@ -271,21 +287,7 @@ class ServiceOrchestrator private constructor(context: Context) {
                 msgHandler.receiveMqttMessage(topic, message)
             }
             
-            // Add MQTT connection callback to publish discovery
-            addOnConnectCallback {
-                Log.d(TAG, "MQTT connected, publishing HA discovery")
-                homeAssistantDiscovery?.apply {
-                    initialize()
-                    publishDiscovery()
-                    publishAvailability(true)
-                }
-            }
-            
-            // Add MQTT disconnection callback to handle availability
-            addOnDisconnectCallback {
-                Log.d(TAG, "MQTT disconnected")
-                homeAssistantDiscovery?.publishAvailability(false)
-            }
+
             
             Log.d(TAG, "MQTT command listeners registered")
         }
@@ -302,11 +304,12 @@ class ServiceOrchestrator private constructor(context: Context) {
                     
                     // Initialize service if not already done
                     if (mqttService == null) {
-                        val context = contextRef.get()
-                        if (context != null) {
-                            mqttService = MqttService.getInstance(context, mqttRepo)
-                            mqttService?.initialize()
-                        }
+                        initializeMqttService(contextRef.get() ?: return@collectLatest)
+//                        val context = contextRef.get()
+//                        if (context != null) {
+//                            mqttService = MqttService.getInstance(context, mqttRepo)
+//                            mqttService?.initialize()
+//                        }
                     }
                     
                     // Connect the service
@@ -333,16 +336,13 @@ class ServiceOrchestrator private constructor(context: Context) {
 
         // Wait for initial load and check if update is needed
         val currentProperties = repository.properties.value
-        val tolerance = 1.0f
-        val widthNeedsUpdate = kotlin.math.abs(currentProperties.screenWidthDp - screenWidthInDp) > tolerance
-        val heightNeedsUpdate = kotlin.math.abs(currentProperties.screenHeightDp - screenHeightInDp) > tolerance
+//        val tolerance = 1.0f
+//        val widthNeedsUpdate = kotlin.math.abs(currentProperties.screenWidthDp - screenWidthInDp) > tolerance
+//        val heightNeedsUpdate = kotlin.math.abs(currentProperties.screenHeightDp - screenHeightInDp) > tolerance
 
-        if (widthNeedsUpdate || heightNeedsUpdate) {
-            Log.d(TAG, "Updating screen dimensions in repository")
+
             repository.updateScreenDimensions(screenWidthInDp, screenHeightInDp)
-        } else {
-            Log.d(TAG, "Screen dimensions unchanged")
-        }
+
     }
     
     private fun initializeOverlayService(context: Context) {

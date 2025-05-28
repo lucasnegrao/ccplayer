@@ -4,6 +4,11 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import androidx.compose.ui.unit.Dp
+import com.antiglitch.yetanothernotifier.data.properties.AspectRatio
+import com.antiglitch.yetanothernotifier.data.properties.Gravity
+import com.antiglitch.yetanothernotifier.data.properties.Property
+import com.antiglitch.yetanothernotifier.data.repository.NotificationVisualPropertiesRepository
 import com.antiglitch.yetanothernotifier.messaging.Command
 import com.antiglitch.yetanothernotifier.messaging.CommandHandler
 import com.antiglitch.yetanothernotifier.messaging.MessageHandlingService
@@ -53,6 +58,10 @@ class HomeAssistantDiscovery(
     
     private val messageHandler: MessageHandlingService by lazy {
         MessageHandlingService.getInstance(context)
+    }
+
+    private val notificationPropertiesRepository: NotificationVisualPropertiesRepository by lazy {
+        NotificationVisualPropertiesRepository.getInstance(context)
     }
     
     private val baseUniqueId = "${HA_OBJECT_ID_PREFIX}${deviceId.replace(Regex("[^a-zA-Z0-9_-]"), "_")}"
@@ -249,34 +258,142 @@ class HomeAssistantDiscovery(
         
         // --- Notification Components ---
         
-        // Notification properties
-        componentDefinitions.add(
-            SwitchDefinition(
-                name = "Notification Enabled",
-                uniqueIdSuffix = "notification_enabled",
-                stateTopic = "$statusPrefix/notification_properties",
-                commandTopic = "$commandPrefix/update_notification_properties",
-                valueTemplate = "{{ value_json.enabled }}",
-                payloadOn = "{\"enabled\": true}",
-                payloadOff = "{\"enabled\": false}",
-                icon = "mdi:bell"
-            )
-        )
-        
+        // Dynamically add notification properties
+        val notificationProps = notificationPropertiesRepository.dynamicPropertiesMap.value
+        notificationProps.forEach { (key, prop) ->
+            // Assuming no 'hidden' field on Property for now. If added, check here:
+            // if (prop.hidden) return@forEach
+
+            when (prop.defaultValue) {
+                is Boolean -> componentDefinitions.add(
+                    SwitchDefinition(
+                        name = prop.displayName,
+                        uniqueIdSuffix = "notification_prop_$key",
+                        stateTopic = "$statusPrefix/notification_properties",
+                        commandTopic = "$commandPrefix/update_notification_properties",
+                        valueTemplate = "{{ value_json.$key }}",
+                        payloadOn = "{\"$key\": true}",
+                        payloadOff = "{\"$key\": false}",
+                        icon = "mdi:toggle-switch-outline", // Generic icon
+                        category = "config"
+                    )
+                )
+                is Long -> {
+                    val range = prop.getRangeTyped<ClosedRange<Long>>()
+                    componentDefinitions.add(
+                        NumberDefinition(
+                            name = prop.displayName,
+                            uniqueIdSuffix = "notification_prop_$key",
+                            stateTopic = "$statusPrefix/notification_properties",
+                            commandTopic = "$commandPrefix/update_notification_properties",
+                            valueTemplate = "{{ value_json.$key }}",
+                            commandTemplate = "{\"$key\": {{ value | int }}}",
+                            min = range?.start ?: 0L,
+                            max = range?.endInclusive ?: 10000L,
+                            step = prop.getStepTyped<Long>() ?: 1L,
+                            mode = "box", // Or "slider"
+                            icon = "mdi:ray-vertex", // Generic icon
+                            category = "config",
+                            unitOfMeasurement = if (key.contains("duration", ignoreCase = true)) "ms" else null
+                        )
+                    )
+                }
+                is Float -> {
+                    val range = prop.getRangeTyped<ClosedFloatingPointRange<Float>>()
+                    componentDefinitions.add(
+                        NumberDefinition(
+                            name = prop.displayName,
+                            uniqueIdSuffix = "notification_prop_$key",
+                            stateTopic = "$statusPrefix/notification_properties",
+                            commandTopic = "$commandPrefix/update_notification_properties",
+                            valueTemplate = "{{ value_json.$key }}",
+                            commandTemplate = "{\"$key\": {{ value }}}}",
+                            min = range?.start ?: 0.0f,
+                            max = range?.endInclusive ?: 1.0f,
+                            step = prop.getStepTyped<Float>() ?: 0.01f,
+                            mode = "slider",
+                            icon = "mdi:ray-vertex", // Generic icon
+                            category = "config"
+                        )
+                    )
+                }
+                is Dp -> {
+                    val range = prop.getRangeTyped<ClosedRange<Dp>>()
+                    componentDefinitions.add(
+                        NumberDefinition(
+                            name = prop.displayName,
+                            uniqueIdSuffix = "notification_prop_$key",
+                            stateTopic = "$statusPrefix/notification_properties",
+                            commandTopic = "$commandPrefix/update_notification_properties",
+                            valueTemplate = "{{ value_json.$key }}", // Dp is serialized as float by handler
+                            commandTemplate = "{\"$key\": {{ value }}}}", // Handler expects float for Dp
+                            min = range?.start?.value ?: 0f,
+                            max = range?.endInclusive?.value ?: 100f,
+                            step = prop.getStepTyped<Dp>()?.value ?: 1f,
+                            mode = "slider",
+                            icon = "mdi:ruler-square", // Generic icon for Dp
+                            category = "config",
+                            unitOfMeasurement = "dp"
+                        )
+                    )
+                }
+                is Enum<*> -> {
+                    val options = prop.enumValues?.map { it.name } ?: emptyList()
+                    if (options.isNotEmpty()) {
+                        componentDefinitions.add(
+                            SelectDefinition(
+                                name = prop.displayName,
+                                uniqueIdSuffix = "notification_prop_$key",
+                                stateTopic = "$statusPrefix/notification_properties",
+                                commandTopic = "$commandPrefix/update_notification_properties",
+                                valueTemplate = "{{ value_json.$key }}", // Enum is serialized as name
+                                commandTemplate = "{\"$key\": \"{{ value }}\"}",
+                                options = options,
+                                icon = "mdi:form-select", // Generic icon
+                                category = "config"
+                            )
+                        )
+                    }
+                }
+                // Add other types if necessary, e.g., String -> TextDefinition
+                else -> Log.w(TAG, "Unsupported property type for HA discovery: $key of type ${prop.defaultValue!!::class.simpleName}")
+            }
+        }
+
+        // Explicitly add screenWidthDp and screenHeightDp as they are not in dynamicPropertiesMap
+        // but are handled by NotificationPropertiesCommandHandler
         componentDefinitions.add(
             NumberDefinition(
-                name = "Notification Duration",
-                uniqueIdSuffix = "notification_duration",
+                name = "Notification Screen Width",
+                uniqueIdSuffix = "notification_screen_width_dp",
                 stateTopic = "$statusPrefix/notification_properties",
                 commandTopic = "$commandPrefix/update_notification_properties",
-                valueTemplate = "{{ value_json.defaultDurationMs | default(0) }}",
-                commandTemplate = "{\"defaultDurationMs\": {{ value | int }}}",
-                min = 1000,
-                max = 60000,
-                step = 1000,
+                valueTemplate = "{{ value_json.screenWidthDp | default(360) }}",
+                commandTemplate = "{\"screenWidthDp\": {{ value }}}}",
+                min = 100, // Example range
+                max = 4000, // Example range
+                step = 1,
                 mode = "box",
-                icon = "mdi:timer-outline",
-                unitOfMeasurement = "ms"
+                icon = "mdi:arrow-expand-horizontal",
+                category = "config",
+                unitOfMeasurement = "dp"
+            )
+        )
+        componentDefinitions.add(
+            NumberDefinition(
+                name = "Notification Screen Height",
+                uniqueIdSuffix = "notification_screen_height_dp",
+                stateTopic = "$statusPrefix/notification_properties",
+                commandTopic = "$commandPrefix/update_notification_properties",
+                valueTemplate = "{{ value_json.screenHeightDp | default(640) }}",
+                commandTemplate = "{\"screenHeightDp\": {{ value }}}}",
+                min = 100, // Example range
+                max = 4000, // Example range
+                step = 1,
+                mode = "box",
+                icon = "mdi:arrow-expand-vertical",
+                category = "config",
+                unitOfMeasurement = "dp"
             )
         )
         
@@ -357,6 +474,7 @@ class HomeAssistantDiscovery(
                 is NumberDefinition -> queueNumber(discoveryMessages, definition)
                 is TextDefinition -> queueText(discoveryMessages, definition)
                 is TriggerDefinition -> queueDeviceTrigger(discoveryMessages, definition)
+                is SelectDefinition -> queueSelect(discoveryMessages, definition) // Added
             }
         }
         
@@ -518,6 +636,29 @@ class HomeAssistantDiscovery(
     }
     
     /**
+     * Queue a select entity for publishing
+     */
+    private fun queueSelect(messages: MutableList<Pair<String, String>>, definition: SelectDefinition) {
+        val payload = createBasePayload(
+            definition.name,
+            definition.uniqueIdSuffix,
+            definition.icon,
+            definition.category
+        ).apply {
+            put("state_topic", definition.stateTopic)
+            put("command_topic", definition.commandTopic)
+            put("value_template", definition.valueTemplate)
+            put("command_template", definition.commandTemplate)
+            put("options", JSONArray(definition.options))
+        }
+
+        messages.add(Pair(
+            "$HA_DISCOVERY_PREFIX/select/$baseUniqueId/${definition.uniqueIdSuffix}/config",
+            payload.toString()
+        ))
+    }
+
+    /**
      * Queue a device trigger for publishing
      */
     private fun queueDeviceTrigger(messages: MutableList<Pair<String, String>>, definition: TriggerDefinition) {
@@ -651,4 +792,16 @@ data class TriggerDefinition(
     val triggerSubtype: String,
     val topic: String,
     val payload: String
+) : ComponentDefinition()
+
+data class SelectDefinition(
+    val name: String,
+    val uniqueIdSuffix: String,
+    val stateTopic: String,
+    val commandTopic: String,
+    val valueTemplate: String,
+    val commandTemplate: String,
+    val options: List<String>,
+    val icon: String? = null,
+    val category: String? = null
 ) : ComponentDefinition()

@@ -26,6 +26,7 @@ data class Property<T>(
     // Metadata specific to types
     val range: Any? = null,
     val step: Any? = null,
+    val hidden: Boolean = false,
     val enumClass: Class<out Enum<*>>? = null,
     val enumValues: Array<out Enum<*>>? = null
 ) {
@@ -141,6 +142,26 @@ class NotificationModel constructor() { // Make constructor public (or remove pr
                 step = 0.05f           // Updated from PropertyRanges
             )
         )
+        addProperty(
+            Property(
+                key = "screenHeightDp",
+                displayName = "Screen Height (dp)",
+                defaultValue = 640f,       // Default from NVP
+                range = 0.0f..2160f,  // Matches PropertyRanges
+                step = 1.0f,           // Updated from PropertyRanges
+                hidden = true
+            )
+        )
+        addProperty(
+            Property(
+                key = "screenWidthDp",
+                displayName = "Screen Width (dp)",
+                defaultValue = 360f,       // Default from NVP
+                range = 0.0f..2160f,  // Matches PropertyRanges
+                step = 1.0f,           // Updated from PropertyRanges
+                hidden = true
+            )
+        )
     }
 
     private fun <T> addProperty(property: Property<T>) {
@@ -159,6 +180,38 @@ class NotificationModel constructor() { // Make constructor public (or remove pr
     @Suppress("UNCHECKED_CAST")
     fun <T> getPropertyState(key: String): MutableState<T>? {
         return _properties[key]?.state as? MutableState<T>
+    }
+
+    /** Creates a deep copy of this NotificationModel with all current property values preserved. */
+    fun copy(): NotificationModel {
+        val newModel = NotificationModel()
+        
+        // Copy all current property values to the new model
+        _properties.forEach { (key, property) ->
+            val newProperty = newModel.getProperty(key)
+            if (newProperty != null) {
+                // Copy the current value to the new model's property
+                when (property.value) {
+                    is Long -> (newProperty as? Property<Long>)?.value = property.value as Long
+                    is Float -> (newProperty as? Property<Float>)?.value = property.value as Float
+                    is Dp -> (newProperty as? Property<Dp>)?.value = property.value as Dp
+                    is Boolean -> (newProperty as? Property<Boolean>)?.value = property.value as Boolean
+                    is AspectRatio -> (newProperty as? Property<AspectRatio>)?.value = property.value as AspectRatio
+                    is Gravity -> (newProperty as? Property<Gravity>)?.value = property.value as Gravity
+                    else -> {
+                        // Use reflection for safe assignment
+                        try {
+                            newProperty.state.value = property.value as Nothing
+                        } catch (e: Exception) {
+                            // Log warning but continue
+                            println("Warning: Could not copy property '$key' with value ${property.value}")
+                        }
+                    }
+                }
+            }
+        }
+        
+        return newModel
     }
 
 }

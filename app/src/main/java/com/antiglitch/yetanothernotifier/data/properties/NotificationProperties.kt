@@ -29,8 +29,6 @@ import kotlinx.serialization.serializer // For String.serializer()
 
 @Serializable(with = NotificationVisualPropertiesSerializer::class) // Updated to use custom serializer
 data class NotificationVisualProperties(
-    @Transient val screenWidthDp: Float = DEFAULT_SCREEN_WIDTH_DP,
-    @Transient val screenHeightDp: Float = DEFAULT_SCREEN_HEIGHT_DP,
     val model: NotificationModel = NotificationModel()
 ) {
     // Delegating properties to the model
@@ -42,6 +40,8 @@ data class NotificationVisualProperties(
     val roundedCorners: Boolean get() = model.getProperty("roundedCorners")!!.value as Boolean
     val margin: Dp get() = model.getProperty("margin")!!.value as Dp
     val transparency: Float get() = model.getProperty("transparency")!!.value as Float
+     val screenWidthDp: Float get() = model.getProperty("screenWidthDp")!!.value as Float
+     val screenHeightDp: Float get() = model.getProperty("screenHeightDp")!!.value as Float
 
     // Convenience map to access properties by key
     val propertiesMap: Map<String, Property<*>> get() = model.properties

@@ -15,6 +15,7 @@ import com.antiglitch.yetanothernotifier.messaging.MessageHandlingService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -40,9 +41,11 @@ class NotificationPropertiesCommandHandler(private val context: Context) : Comma
     }
     
     private val propertyUpdateJob = SupervisorJob()
-    private val propertyScope = CoroutineScope(propertyUpdateJob + Dispatchers.Default)
-    
+    private val propertyScope = CoroutineScope(propertyUpdateJob + Dispatchers.Main.immediate)
+        private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
     init {
+        Log.d(TAG, "Initializing NotificationPropertiesCommandHandler")
         startPropertyMonitoring()
     }
     
@@ -219,13 +222,29 @@ class NotificationPropertiesCommandHandler(private val context: Context) : Comma
      * Start monitoring property changes to broadcast updates
      */
     private fun startPropertyMonitoring() {
-        propertyScope.launch {
+        Log.d(TAG, "Starting property monitoring...")
+        serviceScope.launch {
             try {
-                repository.properties.collect { properties -> // properties is NotificationVisualProperties
+                Log.d(TAG, "Repository instance: ${repository.hashCode()}")
+                Log.d(TAG, "Initial properties: ${repository.properties.value}")
+                
+                repository.properties.collect { properties ->
+                    Log.d(TAG, "Property update received in CommandHandler: ${properties.hashCode()}")
+                    Log.d(TAG, "Properties details: width=${properties.width}, height=${properties.height}, gravity=${properties.gravity}")
                     broadcastPropertyUpdate(properties)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error monitoring property changes", e)
+            }
+        }
+
+         // If you specifically need dynamic properties map:
+        serviceScope.launch {
+            repository.dynamicPropertiesMap.collect { propertiesMap ->
+                Log.d("YourService", "Dynamic properties map changed: ${propertiesMap.size} properties")
+                // Handle dynamic properties changes here
+               // broadcastPropertyUpdate(propertiesMap)
+
             }
         }
     }
@@ -234,6 +253,7 @@ class NotificationPropertiesCommandHandler(private val context: Context) : Comma
      * Broadcast property update to MQTT
      */
     private fun broadcastPropertyUpdate(properties: NotificationVisualProperties) {
+        Log.d(TAG, "Broadcasting property update - total properties: ${properties.model.properties.size}")
         // Construct a map of configurable properties for broadcasting
         val propsMapToSend = mutableMapOf<String, Any?>()
         properties.model.properties.forEach { (key, prop) ->

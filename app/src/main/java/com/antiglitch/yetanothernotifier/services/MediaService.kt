@@ -9,6 +9,7 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import androidx.media3.session.SessionToken
 import com.antiglitch.yetanothernotifier.utils.CustomMediaSessionConnector
+import com.antiglitch.yetanothernotifier.utils.HybridMediaSourceFactory
 
 class MediaService : MediaSessionService() {
 
@@ -26,6 +27,7 @@ class MediaService : MediaSessionService() {
         super.onCreate()
 
         player = ExoPlayer.Builder(this)
+            .setMediaSourceFactory(HybridMediaSourceFactory(this))
             .build()
 
         mediaSession = MediaSession.Builder(this, player!!)

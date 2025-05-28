@@ -1,5 +1,6 @@
 package com.antiglitch.yetanothernotifier
 
+import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -36,7 +37,7 @@ import com.antiglitch.yetanothernotifier.ui.theme.YetAnotherNotifierTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
-import com.antiglitch.yetanothernotifier.services.MediaController as CustomMediaController
+import com.antiglitch.yetanothernotifier.services.HybridMediaController as CustomMediaController
 
 class OverlayService : LifecycleService() {
     private lateinit var windowManager: WindowManager
@@ -51,6 +52,7 @@ class OverlayService : LifecycleService() {
             MutableStateFlow<androidx.media3.session.MediaController?>(null)
 
         // Reference to the custom media controller from orchestrator
+        @SuppressLint("StaticFieldLeak")
         private var customMediaController: CustomMediaController? = null
 
         fun startService(context: Context) {

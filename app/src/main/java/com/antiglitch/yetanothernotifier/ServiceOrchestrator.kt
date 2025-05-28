@@ -4,13 +4,12 @@ import android.content.Context
 import android.util.Log
 import android.view.WindowManager
 import androidx.media3.common.MediaItem
-import com.antiglitch.yetanothernotifier.data.properties.NotificationModel
 import com.antiglitch.yetanothernotifier.data.repository.MqttDiscoveryRepository
 import com.antiglitch.yetanothernotifier.data.repository.MqttPropertiesRepository
 import com.antiglitch.yetanothernotifier.data.repository.NotificationVisualPropertiesRepository
 import com.antiglitch.yetanothernotifier.services.MqttService
 import com.antiglitch.yetanothernotifier.services.YtDlpService
-import com.antiglitch.yetanothernotifier.services.MediaController
+import com.antiglitch.yetanothernotifier.services.HybridMediaController
 import com.antiglitch.yetanothernotifier.services.MediaControllerCallback
 import com.antiglitch.yetanothernotifier.messaging.MessageHandlingService
 import com.antiglitch.yetanothernotifier.messaging.handlers.NotificationCommandHandler
@@ -87,7 +86,7 @@ class ServiceOrchestrator private constructor(context: Context) {
     private var homeAssistantDiscovery: HomeAssistantDiscovery? = null
     
     // MediaController instance
-    private var customMediaController: MediaController? = null
+    private var customHybridMediaController: HybridMediaController? = null
     
     // Handler references
     private var mediaControlCommandHandler: MediaControlCommandHandler? = null
@@ -195,22 +194,22 @@ class ServiceOrchestrator private constructor(context: Context) {
     private fun initializeMediaController(context: Context) {
         Log.d(TAG, "Initializing MediaController")
         
-        customMediaController?.release() // Release any existing instance
-        customMediaController = MediaController(context, object : MediaControllerCallback {
+        customHybridMediaController?.release() // Release any existing instance
+        customHybridMediaController = HybridMediaController(context, object : MediaControllerCallback {
             override fun onInitialized(success: Boolean) {
                 if (success) {
                     Log.d(TAG, "MediaController initialized successfully")
                     _mediaControllerReady.value = true
                     
                     // Provide controller to OverlayService
-                    OverlayService.setMediaController(customMediaController)
+                    OverlayService.setMediaController(customHybridMediaController)
                     
                     // Update MediaControlCommandHandler using stored reference
-                    mediaControlCommandHandler?.updateMediaController(customMediaController)
+                    mediaControlCommandHandler?.updateMediaController(customHybridMediaController)
                     Log.d(TAG, "MediaControlCommandHandler updated with controller")
                     
                     // Load initial media if needed
-                    customMediaController?.loadUrl("https://www.xvideos.com/video.kpmcidh5fe9/compilation_of_young_traps_pleasing_themselves_cum_and_fun")
+                    customHybridMediaController?.loadUrl("https://www.xvideos.com/video.kpmcidh5fe9/compilation_of_young_traps_pleasing_themselves_cum_and_fun")
                 } else {
                     Log.e(TAG, "MediaController initialization failed")
                     _mediaControllerReady.value = false
@@ -379,7 +378,7 @@ class ServiceOrchestrator private constructor(context: Context) {
     /**
      * Get the current MediaController instance
      */
-    fun getMediaController(): MediaController? = customMediaController
+    fun getMediaController(): HybridMediaController? = customHybridMediaController
     
     /**
      * Reinitialize MediaController
@@ -407,8 +406,8 @@ class ServiceOrchestrator private constructor(context: Context) {
             mqttDiscoveryRepository?.stopDiscovery()
             
             // Release MediaController
-            customMediaController?.release()
-            customMediaController = null
+            customHybridMediaController?.release()
+            customHybridMediaController = null
             _mediaControllerReady.value = false
             OverlayService.setMediaController(null)
             

@@ -32,7 +32,7 @@ interface MediaControllerInterface {
     fun release()
 }
 
-class MediaController(
+class HybridMediaController(
     private var context: Context,
     private var callback: MediaControllerCallback
 ) : MediaControllerInterface {

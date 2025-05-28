@@ -14,7 +14,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import com.antiglitch.yetanothernotifier.OverlayService
-import com.antiglitch.yetanothernotifier.player.ExoPlayerComposable
 import com.antiglitch.yetanothernotifier.data.repository.NotificationVisualPropertiesRepository
 
 
@@ -48,8 +47,8 @@ fun NotificationCard(
             RectangleShape
         }
 
-        ExoPlayerComposable(
-            player = player, // Use the player from the service
+        HybridPlayerComposable(
+            player, // Use the player from the service
             shape = shape
         )
     }

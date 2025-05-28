@@ -12,7 +12,7 @@ import com.antiglitch.yetanothernotifier.messaging.Command
 import com.antiglitch.yetanothernotifier.messaging.CommandHandler
 import com.antiglitch.yetanothernotifier.messaging.CommandResult
 import com.antiglitch.yetanothernotifier.messaging.MessageHandlingService
-import com.antiglitch.yetanothernotifier.services.MediaController
+import com.antiglitch.yetanothernotifier.services.HybridMediaController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -22,7 +22,7 @@ import kotlinx.coroutines.withContext
  */
 class MediaControlCommandHandler(
     private val context: Context,
-    private var mediaController: MediaController? = null
+    private var hybridMediaController: HybridMediaController? = null
 ) : CommandHandler {
     companion object {
         private const val TAG = "MediaControlCmdHandler"
@@ -60,21 +60,21 @@ class MediaControlCommandHandler(
     /**
      * Update the media controller
      */
-    fun updateMediaController(controller: MediaController?) {
-        this.mediaController = controller
-        Log.d(TAG, "Media controller updated: ${controller?.let { "CustomMediaController with session: ${MediaController.sessionToken}" } ?: "null"}")
+    fun updateMediaController(controller: HybridMediaController?) {
+        this.hybridMediaController = controller
+        Log.d(TAG, "Media controller updated: ${controller?.let { "CustomMediaController with session: ${HybridMediaController.sessionToken}" } ?: "null"}")
     }
     
     /**
      * Get the current media controller
      */
-    fun getMediaController(): MediaController? = mediaController
+    fun getMediaController(): HybridMediaController? = hybridMediaController
     
     /**
      * Check if we have a valid media controller
      */
     private fun hasValidController(): Boolean {
-        return mediaController?.mediaController != null
+        return hybridMediaController?.mediaController != null
     }
     
     override suspend fun handle(command: Command): CommandResult {
@@ -102,7 +102,7 @@ class MediaControlCommandHandler(
      * Handle play command
      */
     private suspend fun handlePlay(): CommandResult = withContext(Dispatchers.Main) {
-        val controller = mediaController?.mediaController ?: 
+        val controller = hybridMediaController?.mediaController ?:
             return@withContext CommandResult.Error("No media controller available")
         
         return@withContext try {
@@ -122,7 +122,7 @@ class MediaControlCommandHandler(
      * Handle pause command
      */
     private suspend fun handlePause(): CommandResult = withContext(Dispatchers.Main) {
-        val controller = mediaController?.mediaController ?: 
+        val controller = hybridMediaController?.mediaController ?:
             return@withContext CommandResult.Error("No media controller available")
         
         return@withContext try {
@@ -142,7 +142,7 @@ class MediaControlCommandHandler(
      * Handle toggle play/pause command
      */
     private suspend fun handleTogglePlay(): CommandResult = withContext(Dispatchers.Main) {
-        val controller = mediaController?.mediaController ?: 
+        val controller = hybridMediaController?.mediaController ?:
             return@withContext CommandResult.Error("No media controller available")
         
         return@withContext try {
@@ -166,7 +166,7 @@ class MediaControlCommandHandler(
      * Handle next track command
      */
     private suspend fun handleNext(): CommandResult = withContext(Dispatchers.Main) {
-        val controller = mediaController?.mediaController ?: 
+        val controller = hybridMediaController?.mediaController ?:
             return@withContext CommandResult.Error("No media controller available")
         
         return@withContext try {
@@ -186,7 +186,7 @@ class MediaControlCommandHandler(
      * Handle previous track command
      */
     private suspend fun handlePrevious(): CommandResult = withContext(Dispatchers.Main) {
-        val controller = mediaController?.mediaController ?: 
+        val controller = hybridMediaController?.mediaController ?:
             return@withContext CommandResult.Error("No media controller available")
         
         return@withContext try {
@@ -206,7 +206,7 @@ class MediaControlCommandHandler(
      * Handle stop command
      */
     private suspend fun handleStop(): CommandResult = withContext(Dispatchers.Main) {
-        val controller = mediaController?.mediaController ?: 
+        val controller = hybridMediaController?.mediaController ?:
             return@withContext CommandResult.Error("No media controller available")
         
         return@withContext try {
@@ -226,7 +226,7 @@ class MediaControlCommandHandler(
      * Handle get state command
      */
     private suspend fun handleGetState(): CommandResult = withContext(Dispatchers.Main) {
-        val controller = mediaController?.mediaController
+        val controller = hybridMediaController?.mediaController
         
         return@withContext if (controller != null) {
             val stateInfo = getMediaStateInfo(controller)
@@ -243,20 +243,20 @@ class MediaControlCommandHandler(
      * Handle get metadata command
      */
     private suspend fun handleGetMetadata(): CommandResult = withContext(Dispatchers.Main) {
-        val controller = mediaController?.mediaController
+        val controller = hybridMediaController?.mediaController
         
         return@withContext if (controller != null) {
             controller.currentMediaItem?.let { mediaItem ->
                 val serializedMediaItem = serializeMediaItem(mediaItem)
                 CommandResult.Success(mapOf(
                     "active" to true,
-                    "sessionToken" to MediaController.sessionToken?.toString(),
+                    "sessionToken" to HybridMediaController.sessionToken?.toString(),
                     "packageName" to context.packageName,
                     "mediaItem" to serializedMediaItem
                 ))
             } ?: CommandResult.Success(mapOf(
                 "active" to true,
-                "sessionToken" to MediaController.sessionToken?.toString(),
+                "sessionToken" to HybridMediaController.sessionToken?.toString(),
                 "packageName" to context.packageName,
                 "mediaItem" to null
             ))
@@ -272,7 +272,7 @@ class MediaControlCommandHandler(
      * Handle seek to position command
      */
     private suspend fun handleSeekTo(payload: Map<String, Any?>): CommandResult = withContext(Dispatchers.Main) {
-        val controller = mediaController?.mediaController ?: 
+        val controller = hybridMediaController?.mediaController ?:
             return@withContext CommandResult.Error("No media controller available")
         
         val position = when (val posValue = payload["position"]) {
@@ -299,7 +299,7 @@ class MediaControlCommandHandler(
      * Handle adjust volume command
      */
     private suspend fun handleAdjustVolume(payload: Map<String, Any?>): CommandResult = withContext(Dispatchers.Main) {
-        val controller = mediaController?.mediaController ?: 
+        val controller = hybridMediaController?.mediaController ?:
             return@withContext CommandResult.Error("No media controller available")
         
         // Extract direction of adjustment - support multiple parameter names
@@ -362,7 +362,7 @@ class MediaControlCommandHandler(
      * Handle load URL command
      */
     private suspend fun handleLoadUrl(payload: Map<String, Any?>): CommandResult = withContext(Dispatchers.Main) {
-        val controller = mediaController ?: 
+        val controller = hybridMediaController ?:
             return@withContext CommandResult.Error("No media controller available")
         
         val url = when (val urlValue = payload["url"]) {
@@ -394,7 +394,7 @@ class MediaControlCommandHandler(
     private fun getMediaStateInfo(controller: androidx.media3.session.MediaController): Map<String, Any?> {
         val stateInfo = mutableMapOf<String, Any?>(
             "active" to true,
-            "sessionToken" to MediaController.sessionToken?.toString(),
+            "sessionToken" to HybridMediaController.sessionToken?.toString(),
             "packageName" to context.packageName
         )
         
@@ -527,7 +527,7 @@ class MediaControlCommandHandler(
      * Send media state update as an internal command
      */
     private fun sendMediaStateUpdate() {
-        mediaController?.mediaController?.let { controller ->
+        hybridMediaController?.mediaController?.let { controller ->
             val stateInfo = getMediaStateInfo(controller)
             messageHandler.sendInternalCommand("media_state_update", stateInfo)
             messageHandler.broadcastUpdate("media_state", stateInfo)
@@ -545,7 +545,7 @@ class MediaControlCommandHandler(
      * Send media metadata update as an internal command
      */
     private fun sendMediaMetadataUpdate() {
-        mediaController?.mediaController?.let { controller ->
+        hybridMediaController?.mediaController?.let { controller ->
             // Send complete media item instead of just metadata
             controller.currentMediaItem?.let { mediaItem ->
                 val serializedMediaItem = serializeMediaItem(mediaItem)

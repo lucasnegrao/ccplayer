@@ -2,6 +2,7 @@ package com.antiglitch.yetanothernotifier.messaging.handlers
 
 import android.content.Context
 import android.util.Log
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.antiglitch.yetanothernotifier.data.properties.AspectRatio
 import com.antiglitch.yetanothernotifier.data.properties.Gravity
@@ -67,10 +68,23 @@ class NotificationPropertiesCommandHandler(private val context: Context) : Comma
      */
     private suspend fun handleGetProperties(): CommandResult {
         return try {
-            val properties = repository.properties.value
-            val propsMap = properties.toMap()
-            Log.d(TAG, "Retrieved notification properties: $propsMap")
-            CommandResult.Success(propsMap)
+            val currentNVP = repository.properties.value
+            val modelPropsMap = repository.dynamicPropertiesMap.value // Map<String, Property<*>>
+
+            val resultMap = mutableMapOf<String, Any?>()
+            modelPropsMap.forEach { (key, property) ->
+                resultMap[key] = when (val value = property.value) {
+                    is Dp -> value.value // Store Dp as Float for serialization
+                    is AspectRatio -> value.name // Store enums as names
+                    is Gravity -> value.name
+                    else -> value
+                }
+            }
+            resultMap["screenWidthDp"] = currentNVP.screenWidthDp
+            resultMap["screenHeightDp"] = currentNVP.screenHeightDp
+            
+            Log.d(TAG, "Retrieved notification properties: $resultMap")
+            CommandResult.Success(resultMap)
         } catch (e: Exception) {
             Log.e(TAG, "Error getting notification properties", e)
             CommandResult.Error("Failed to get notification properties: ${e.message}", e)
@@ -86,14 +100,65 @@ class NotificationPropertiesCommandHandler(private val context: Context) : Comma
         }
         
         return try {
-            val currentProps = repository.properties.value
-            val updatedProps = updatePropertiesWithPayload(currentProps, payload)
-            
-            withContext(Dispatchers.IO) {
-                repository.updateProperties(updatedProps)
+            val currentNVP = repository.properties.value 
+            val modelPropertyDefinitions = repository.dynamicPropertiesMap.value // Map<String, Property<*>>
+
+            var receivedScreenWidth: Float? = null
+            var receivedScreenHeight: Float? = null
+            var screenDimensionsPotentiallyChanged = false
+
+            payload.forEach { (key, value) ->
+                try {
+                    when {
+                        key == "screenWidthDp" -> { // Handle screen dimensions separately
+                            receivedScreenWidth = convertToFloat(value)
+                            if (receivedScreenWidth != null) screenDimensionsPotentiallyChanged = true
+                        }
+                        key == "screenHeightDp" -> {
+                            receivedScreenHeight = convertToFloat(value)
+                            if (receivedScreenHeight != null) screenDimensionsPotentiallyChanged = true
+                        }
+                        modelPropertyDefinitions.containsKey(key) -> {
+                            val propertyDefinition = modelPropertyDefinitions[key]!! 
+                            val convertedValue: Any? = when (propertyDefinition.defaultValue) {
+                                is Long -> convertToLong(value)
+                                is Float -> convertToFloat(value)
+                                is AspectRatio -> convertToAspectRatio(value)
+                                is Dp -> convertToDp(value)
+                                is Gravity -> convertToGravity(value)
+                                is Boolean -> convertToBoolean(value)
+                                else -> {
+                                    Log.w(TAG, "Unsupported property type for key $key in model: ${propertyDefinition.defaultValue!!::class.java.simpleName}")
+                                    null 
+                                }
+                            }
+                            
+                            if (convertedValue != null) {
+                                repository.updatePropertyByKey(key, convertedValue as Any)
+                                Log.d(TAG, "Updated model property via key: $key = $convertedValue")
+                            } else {
+                                Log.w(TAG, "Failed to convert value for $key: '$value', or value was null after conversion.")
+                            }
+                        }
+                        else -> {
+                            Log.w(TAG, "Unknown property key in payload: $key")
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error processing property update for $key with value '$value'", e)
+                }
+            }
+
+            if (screenDimensionsPotentiallyChanged) {
+                val finalScreenWidth = receivedScreenWidth ?: currentNVP.screenWidthDp
+                val finalScreenHeight = receivedScreenHeight ?: currentNVP.screenHeightDp
+                if (finalScreenWidth != currentNVP.screenWidthDp || finalScreenHeight != currentNVP.screenHeightDp) {
+                    repository.updateScreenDimensions(finalScreenWidth, finalScreenHeight)
+                    Log.d(TAG, "Updated screen dimensions: W=$finalScreenWidth, H=$finalScreenHeight")
+                }
             }
             
-            Log.d(TAG, "Updated notification properties: $payload")
+            Log.d(TAG, "Update process completed for properties: $payload")
             CommandResult.Success()
         } catch (e: Exception) {
             Log.e(TAG, "Error updating notification properties", e)
@@ -118,66 +183,6 @@ class NotificationPropertiesCommandHandler(private val context: Context) : Comma
         }
     }
     
-    /**
-     * Update properties using explicit property mapping (avoiding reflection issues)
-     */
-    private fun updatePropertiesWithPayload(
-        currentProps: NotificationVisualProperties,
-        updates: Map<String, Any?>
-    ): NotificationVisualProperties {
-        var updatedProps = currentProps
-        
-        // Handle each property explicitly with proper type conversion
-        updates.forEach { (key, value) ->
-            try {
-                updatedProps = when (key) {
-                    "duration" -> updatedProps.copy(
-                        duration = convertToLong(value) ?: currentProps.duration
-                    )
-                    "scale" -> updatedProps.copy(
-                        scale = convertToFloat(value) ?: currentProps.scale
-                    )
-                    "aspect" -> updatedProps.copy(
-                        aspect = convertToAspectRatio(value) ?: currentProps.aspect
-                    )
-                    "cornerRadius" -> updatedProps.copy(
-                        cornerRadius = convertToDp(value) ?: currentProps.cornerRadius
-                    )
-                    "gravity" -> updatedProps.copy(
-                        gravity = convertToGravity(value) ?: currentProps.gravity
-                    )
-                    "roundedCorners" -> updatedProps.copy(
-                        roundedCorners = convertToBoolean(value) ?: currentProps.roundedCorners
-                    )
-                    "margin" -> updatedProps.copy(
-                        margin = convertToDp(value) ?: currentProps.margin
-                    )
-                    "transparency" -> updatedProps.copy(
-                        transparency = convertToFloat(value) ?: currentProps.transparency
-                    )
-                    "screenWidthDp" -> updatedProps.copy(
-                        screenWidthDp = convertToFloat(value) ?: currentProps.screenWidthDp
-                    )
-                    "screenHeightDp" -> updatedProps.copy(
-                        screenHeightDp = convertToFloat(value) ?: currentProps.screenHeightDp
-                    )
-                    else -> {
-                        Log.w(TAG, "Unknown property: $key")
-                        updatedProps
-                    }
-                }
-                Log.d(TAG, "Updated property: $key = $value")
-            } catch (e: Exception) {
-                Log.e(TAG, "Error updating property $key with value $value", e)
-            }
-        }
-        
-        return updatedProps
-    }
-    
-    /**
-     * Type conversion helpers
-     */
     private fun convertToLong(value: Any?): Long? = when (value) {
         is Number -> value.toLong()
         is String -> value.toLongOrNull()
@@ -192,50 +197,31 @@ class NotificationPropertiesCommandHandler(private val context: Context) : Comma
     
     private fun convertToBoolean(value: Any?): Boolean? = when (value) {
         is Boolean -> value
-        is String -> value.lowercase() == "true"
-        is Number -> value.toInt() != 0
+        is String -> value.toBooleanStrictOrNull()
         else -> null
     }
     
     private fun convertToDp(value: Any?) = convertToFloat(value)?.dp
     
     private fun convertToAspectRatio(value: Any?): AspectRatio? = when (value) {
-        is String -> AspectRatio.values().find { it.name == value || it.displayName == value }
+        is AspectRatio -> value
+        is String -> AspectRatio.values().find { it.name.equals(value, ignoreCase = true) }
         else -> null
     }
     
     private fun convertToGravity(value: Any?): Gravity? = when (value) {
-        is String -> Gravity.values().find { it.name == value || it.displayName == value }
+        is Gravity -> value
+        is String -> Gravity.values().find { it.name.equals(value, ignoreCase = true) }
         else -> null
     }
-    
-    /**
-     * Convert properties object to a map
-     */
-    private fun NotificationVisualProperties.toMap(): Map<String, Any?> {
-        return mapOf(
-            "duration" to duration,
-            "scale" to scale,
-            "aspect" to aspect.name,
-            "cornerRadius" to cornerRadius.value,
-            "gravity" to gravity.name,
-            "roundedCorners" to roundedCorners,
-            "margin" to margin.value,
-            "transparency" to transparency,
-            "screenWidthDp" to screenWidthDp,
-            "screenHeightDp" to screenHeightDp,
-            "width" to width.value,
-            "height" to height.value
-        )
-    }
-    
+
     /**
      * Start monitoring property changes to broadcast updates
      */
     private fun startPropertyMonitoring() {
         propertyScope.launch {
             try {
-                repository.properties.collect { properties ->
+                repository.properties.collect { properties -> // properties is NotificationVisualProperties
                     broadcastPropertyUpdate(properties)
                 }
             } catch (e: Exception) {
@@ -248,13 +234,21 @@ class NotificationPropertiesCommandHandler(private val context: Context) : Comma
      * Broadcast property update to MQTT
      */
     private fun broadcastPropertyUpdate(properties: NotificationVisualProperties) {
-        val propsMap = properties.toMap()
+        // Construct a map of configurable properties for broadcasting
+        val propsMapToSend = mutableMapOf<String, Any?>()
+        properties.model.properties.forEach { (key, prop) ->
+            propsMapToSend[key] = when (val value = prop.value) {
+                is Dp -> value.value // Store Dp as Float
+                is AspectRatio -> value.name // Store enums as names
+                is Gravity -> value.name
+                else -> value
+            }
+        }
+        propsMapToSend["screenWidthDp"] = properties.screenWidthDp
+        propsMapToSend["screenHeightDp"] = properties.screenHeightDp
         
-        // Use the message handler utility to broadcast updates
-        messageHandler.broadcastUpdate("notification_properties", propsMap)
-        
-        // For detailed logging
-        Log.d(TAG, "Broadcasting notification properties update: ${propsMap.size} properties")
+        messageHandler.broadcastUpdate("notification_properties", propsMapToSend)
+        Log.d(TAG, "Broadcasting notification properties update: ${propsMapToSend.size} properties")
     }
     
     /**

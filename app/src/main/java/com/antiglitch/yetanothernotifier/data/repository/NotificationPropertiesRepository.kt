@@ -8,6 +8,14 @@ import com.antiglitch.yetanothernotifier.data.datastore.preferencesDataStore
 import com.antiglitch.yetanothernotifier.data.properties.AspectRatio
 import com.antiglitch.yetanothernotifier.data.properties.Gravity
 import com.antiglitch.yetanothernotifier.data.properties.NotificationVisualProperties
+import com.antiglitch.yetanothernotifier.data.properties.Property
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 
 class NotificationVisualPropertiesRepository private constructor(
     context: Context
@@ -17,58 +25,105 @@ class NotificationVisualPropertiesRepository private constructor(
     defaultProperties = NotificationVisualProperties()
 ) {
 
-    // Dynamic property updaters using reflection
-    fun updateDuration(duration: Long) {
-        val validDuration = NotificationVisualProperties.Companion.validateDuration(duration)
-        updateProperty(NotificationVisualProperties::duration, validDuration) {
-            copy(duration = it)
+    // Scope for flow transformations within the repository.
+    // For a true singleton, this scope should be managed according to the application lifecycle.
+    // For simplicity, using SupervisorJob + Dispatchers.Default.
+    // Consider cancelling this scope if the repository can be destroyed.
+    private val repositoryScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /**
+     * Provides a StateFlow of the dynamic properties map from the NotificationModel.
+     * This map is suitable for dynamically building UI components.
+     * The Map structure and Property metadata are read-only.
+     * Property values are observable via their MutableState.
+     */
+    val dynamicPropertiesMap: StateFlow<Map<String, Property<*>>> =
+        properties.map { notificationVisualProperties ->
+            notificationVisualProperties.model.properties // or .propertiesMap
+        }.stateIn(
+            scope = repositoryScope,
+            started = SharingStarted.WhileSubscribed(5000L), // Or Eagerly, depending on needs
+            initialValue = defaultProperties.model.properties // Initial value from default
+        )
+
+    /**
+     * Updates a property within the NotificationModel by its key.
+     * Validates the new value against the property's defined range.
+     * Persists the changes to NotificationVisualProperties.
+     *
+     * @param V The type of the property value.
+     * @param key The string key of the property in NotificationModel.
+     * @param newValue The new value for the property.
+     */
+    fun <V : Any> updatePropertyByKey(key: String, newValue: V) {
+        val currentNVP = properties.value
+        val property = currentNVP.model.getProperty(key) as? Property<V> ?: run {
+            Log.e(
+                "NotificationVisualPropertiesRepository",
+                "Property not found or type mismatch for key '$key' with value type ${newValue::class.java.simpleName}"
+            )
+            return
         }
+
+        // Validate the new value against the property's range
+        val validatedValue: V = property.range?.let { rng ->
+            try {
+                when (property.defaultValue) { // Infer type T for range from defaultValue
+                    is Dp -> if (newValue is Dp && rng is ClosedRange<*>) (newValue as Dp).coerceIn(rng as ClosedRange<Dp>) as V else newValue
+                    is Long -> if (newValue is Long && rng is ClosedRange<*>) (newValue as Long).coerceIn(rng as ClosedRange<Long>) as V else newValue
+                    is Float -> if (newValue is Float && rng is ClosedFloatingPointRange<*>) (newValue as Float).coerceIn(rng as ClosedFloatingPointRange<Float>) as V else newValue
+                    else -> newValue // Non-numeric types or types without standard coerceIn
+                }
+            } catch (e: ClassCastException) {
+                Log.e(
+                    "NotificationVisualPropertiesRepository",
+                    "Type mismatch during validation for key '$key'. Expected range type compatible with ${property.defaultValue!!::class.java.simpleName}. Got value ${newValue::class.java.simpleName}. Range: $rng",
+                    e
+                )
+                newValue // Fallback to unvalidated value if cast fails
+            }
+        } ?: newValue // If range is null, use newValue as is
+
+        if (property.value != validatedValue) {
+            property.value = validatedValue // Update the MutableState in the model
+            // Create a shallow copy of NVP. This ensures that the Flow emits a new instance,
+            // even though the 'model' instance within NVP is the same but mutated.
+            // Serialization must handle the updated state of the 'model'.
+            updateProperties(currentNVP.copy())
+        }
+    }
+
+    // Refactored property updaters
+    fun updateDuration(duration: Long) {
+        updatePropertyByKey("duration", duration)
     }
 
     fun updateMargin(margin: Dp) {
-        val validMargin = NotificationVisualProperties.Companion.validateMargin(margin)
-        updateProperty(NotificationVisualProperties::margin, validMargin) {
-            copy(margin = it)
-        }
+        updatePropertyByKey("margin", margin)
     }
 
     fun updateScale(scale: Float) {
-        val validScale = NotificationVisualProperties.Companion.validateScale(scale)
-        updateProperty(NotificationVisualProperties::scale, validScale) {
-            copy(scale = it)
-        }
+        updatePropertyByKey("scale", scale)
     }
 
     fun updateAspect(aspect: AspectRatio) {
-        updateProperty(NotificationVisualProperties::aspect, aspect) {
-            copy(aspect = it)
-        }
+        updatePropertyByKey("aspect", aspect)
     }
 
     fun updateGravity(gravity: Gravity) {
-        updateProperty(NotificationVisualProperties::gravity, gravity) {
-            copy(gravity = it)
-        }
+        updatePropertyByKey("gravity", gravity)
     }
 
     fun updateRoundedCorners(enabled: Boolean) {
-        updateProperty(NotificationVisualProperties::roundedCorners, enabled) {
-            copy(roundedCorners = it)
-        }
+        updatePropertyByKey("roundedCorners", enabled)
     }
 
     fun updateCornerRadius(radius: Dp) {
-        val validRadius = NotificationVisualProperties.Companion.validateCornerRadius(radius)
-        updateProperty(NotificationVisualProperties::cornerRadius, validRadius) {
-            copy(cornerRadius = it)
-        }
+        updatePropertyByKey("cornerRadius", radius)
     }
 
     fun updateTransparency(transparency: Float) {
-        val validTransparency = NotificationVisualProperties.Companion.validateTransparency(transparency)
-        updateProperty(NotificationVisualProperties::transparency, validTransparency) {
-            copy(transparency = it)
-        }
+        updatePropertyByKey("transparency", transparency)
     }
 
     fun updateScreenDimensions(screenWidthDp: Float, screenHeightDp: Float) {

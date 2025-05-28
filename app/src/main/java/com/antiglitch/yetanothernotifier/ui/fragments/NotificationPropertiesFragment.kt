@@ -18,15 +18,13 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.ExperimentalTvMaterial3Api
@@ -41,7 +39,6 @@ import com.antiglitch.yetanothernotifier.ui.components.TvFriendlySwitch
 import com.antiglitch.yetanothernotifier.data.properties.AspectRatio
 import com.antiglitch.yetanothernotifier.data.properties.Gravity
 import com.antiglitch.yetanothernotifier.data.repository.NotificationVisualPropertiesRepository
-import com.antiglitch.yetanothernotifier.data.properties.PropertyRanges
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -52,10 +49,30 @@ fun NotificationPropertiesFragment(
 ) {
     val context = LocalContext.current
     val repository = NotificationVisualPropertiesRepository.getInstance(context)
-    val properties by repository.properties.collectAsState()
+    val dynamicProperties by repository.dynamicPropertiesMap.collectAsState()
     val scrollState = rememberScrollState()
-    var isGravitySelectorTrigger by remember { mutableStateOf(false) }
-    rememberCoroutineScope()
+
+    // Helper to get typed value or default
+    fun <T> getPropValue(key: String, default: T): T {
+        return (dynamicProperties[key]?.value as? T) ?: default
+    }
+
+    // Helper to get typed range or default
+    fun <R> getPropRange(key: String, default: R): R {
+        return (dynamicProperties[key]?.range as? R) ?: default
+    }
+
+    // Helper to get typed step or default
+    fun <S> getPropStep(key: String, default: S): S {
+        return (dynamicProperties[key]?.step as? S) ?: default
+    }
+    
+    // Helper to get enum values or default
+    fun < E : Enum<E>> getEnumValues(key: String, default: Array<E>): Array<E> {
+        @Suppress("UNCHECKED_CAST")
+        return (dynamicProperties[key]?.enumValues as? Array<E>) ?: default
+    }
+
 
     // Scroll to top and request initial focus on launch
 
@@ -114,18 +131,21 @@ fun NotificationPropertiesFragment(
                 )
                 .padding(12.dp) // Inner padding for the content
         ) { // Added fillMaxWidth, kept padding
+            val durationValue = getPropValue("duration", 3000L)
+            val durationRange = getPropRange("duration", 1000L..10000L)
+            val durationStep = getPropStep("duration", 500L)
             Text(
-                text = "Duration: ${properties.duration}ms",
+                text = "Duration: ${durationValue}ms",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant // Explicitly set text color
             )
             TvFriendlySlider(
                 modifier = Modifier
                     .focusRequester(focusRequester),
-                value = properties.duration.toFloat(),
-                onValueChange = { repository.updateDuration(it.toLong()) },
-                valueRange = 1000f..10000f,
-                stepSize = 500f
+                value = durationValue.toFloat(),
+                onValueChange = { repository.updatePropertyByKey("duration", it.toLong()) },
+                valueRange = durationRange.start.toFloat()..durationRange.endInclusive.toFloat(),
+                stepSize = durationStep.toFloat()
             )
         }
         LaunchedEffect(Unit) {
@@ -143,17 +163,19 @@ fun NotificationPropertiesFragment(
                 )
                 .padding(12.dp) // Inner padding for the content
         ) {
+            val scaleValue = getPropValue("scale", 0.5f)
+            val scaleRange = getPropRange("scale", 0.1f..1.0f)
+            val scaleStep = getPropStep("scale", 0.05f)
             Text(
-                text = "Scale: ${String.format("%.2f", properties.scale)}",
+                text = "Scale: ${String.format("%.2f", scaleValue)}",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant // Explicitly set text color
             )
             TvFriendlySlider(
-                // Remove focusRequester from here - only the first element should have it
-                value = properties.scale,
-                onValueChange = { repository.updateScale(it) },
-                valueRange = 0.1f..1.0f, // Corrected scale range
-                stepSize = 0.05f,
+                value = scaleValue,
+                onValueChange = { repository.updatePropertyByKey("scale", it) },
+                valueRange = scaleRange,
+                stepSize = scaleStep,
                 formatValue = { String.format("%.2f", it) }
             )
         }
@@ -167,12 +189,14 @@ fun NotificationPropertiesFragment(
                     shape = RoundedCornerShape(8.dp)
                 )
         ) {
+            val aspectValue = getPropValue("aspect", AspectRatio.WIDE)
+            val aspectOptions = getEnumValues("aspect", AspectRatio.values())
             CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurfaceVariant) {
                 TvFriendlyChipsSelect(
                     title = "Aspect Ratio",
-                    options = AspectRatio.values().toList(),
-                    selectedOption = properties.aspect,
-                    onOptionSelected = { repository.updateAspect(it) },
+                    options = aspectOptions.toList(),
+                    selectedOption = aspectValue,
+                    onOptionSelected = { repository.updatePropertyByKey("aspect", it) },
                     optionLabel = { it.displayName }
                 )
             }
@@ -188,14 +212,15 @@ fun NotificationPropertiesFragment(
                     shape = RoundedCornerShape(8.dp)
                 )
         ) {
+            val gravityValue = getPropValue("gravity", Gravity.TOP_CENTER)
+            val gravityOptions = getEnumValues("gravity", Gravity.values())
             CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurfaceVariant) {
                 TvFriendlyChipsSelect(
                     title = "Gravity",
-                    options = Gravity.values().toList(),
-                    selectedOption = properties.gravity,
+                    options = gravityOptions.toList(),
+                    selectedOption = gravityValue,
                     onOptionSelected = {
-                        isGravitySelectorTrigger = true
-                        repository.updateGravity(it)
+                        repository.updatePropertyByKey("gravity", it)
                     },
                     optionLabel = { it.displayName }
                 )
@@ -212,6 +237,7 @@ fun NotificationPropertiesFragment(
                 )
                 .padding(12.dp)
         ) {
+            val roundedCornersValue = getPropValue("roundedCorners", true)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -223,22 +249,25 @@ fun NotificationPropertiesFragment(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 TvFriendlySwitch(
-                    checked = properties.roundedCorners,
-                    onCheckedChange = { repository.updateRoundedCorners(it) }
+                    checked = roundedCornersValue,
+                    onCheckedChange = { repository.updatePropertyByKey("roundedCorners", it) }
                 )
             }
 
-            if (properties.roundedCorners) {
+            if (roundedCornersValue) {
+                val cornerRadiusValue = getPropValue("cornerRadius", 12.dp)
+                val cornerRadiusRange = getPropRange("cornerRadius", 0.dp..30.dp)
+                val cornerRadiusStep = getPropStep("cornerRadius", 2.dp)
                 Text(
-                    text = "Radius: ${properties.cornerRadius}",
+                    text = "Radius: $cornerRadiusValue",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant // Adjusted color
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 TvFriendlySlider(
-                    value = properties.cornerRadius.value,
-                    onValueChange = { repository.updateCornerRadius(it.dp) },
-                    valueRange = 0f..50f,
-                    stepSize = 1f,
+                    value = cornerRadiusValue.value,
+                    onValueChange = { repository.updatePropertyByKey("cornerRadius", it.dp) },
+                    valueRange = cornerRadiusRange.start.value..cornerRadiusRange.endInclusive.value,
+                    stepSize = cornerRadiusStep.value,
                     formatValue = { "${it.toInt()}dp" }
                 )
             }
@@ -254,20 +283,21 @@ fun NotificationPropertiesFragment(
                 )
                 .padding(12.dp)
         ) {
+            val marginValue = getPropValue("margin", 16.dp)
+            val marginRange = getPropRange("margin", 0.dp..64.dp)
+            val marginStep = getPropStep("margin", 1.dp) // Assuming 1dp step if not specified, adjust if model has different
             Text(
-                text = "Margin: ${properties.margin.value.toInt()}dp",
+                text = "Margin: ${marginValue.value.toInt()}dp",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             TvFriendlySlider(
-                value = properties.margin.value,
+                value = marginValue.value,
                 onValueChange = {
-                    val newMargin =
-                        it.dp // No need for a hard-coded range in properties, just clamp here if needed
-                    repository.updateMargin(newMargin)
+                    repository.updatePropertyByKey("margin", it.dp)
                 },
-                valueRange = 0f..64f, // Simple and direct, 0 to 64 dp
-                stepSize = 2f,
+                valueRange = marginRange.start.value..marginRange.endInclusive.value,
+                stepSize = marginStep.value,
                 formatValue = { "${it.toInt()}dp" }
             )
         }
@@ -282,16 +312,19 @@ fun NotificationPropertiesFragment(
                 )
                 .padding(12.dp)
         ) {
+            val transparencyValue = getPropValue("transparency", 1.0f)
+            val transparencyRange = getPropRange("transparency", 0.0f..1.0f)
+            val transparencyStep = getPropStep("transparency", 0.05f)
             Text(
-                text = "Transparency: ${String.format("%.2f", properties.transparency)}",
+                text = "Transparency: ${String.format("%.2f", transparencyValue)}",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             TvFriendlySlider(
-                value = properties.transparency,
-                onValueChange = { repository.updateTransparency(it) },
-                valueRange = PropertyRanges.TRANSPARENCY,
-                stepSize = PropertyRanges.TRANSPARENCY_STEP,
+                value = transparencyValue,
+                onValueChange = { repository.updatePropertyByKey("transparency", it) },
+                valueRange = transparencyRange,
+                stepSize = transparencyStep,
                 formatValue = { String.format("%.2f", it) }
             )
         }

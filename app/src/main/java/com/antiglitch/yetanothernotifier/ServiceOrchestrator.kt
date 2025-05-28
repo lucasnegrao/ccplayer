@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import android.view.WindowManager
 import androidx.media3.common.MediaItem
+import com.antiglitch.yetanothernotifier.data.properties.NotificationModel
 import com.antiglitch.yetanothernotifier.data.repository.MqttDiscoveryRepository
 import com.antiglitch.yetanothernotifier.data.repository.MqttPropertiesRepository
 import com.antiglitch.yetanothernotifier.data.repository.NotificationVisualPropertiesRepository
@@ -109,7 +110,7 @@ class ServiceOrchestrator private constructor(context: Context) {
         orchestratorScope.launch {
             try {
                 Log.d(TAG, "Starting initialization sequence")
-                
+
                 // Step 1: Calculate screen dimensions
                 calculateScreenDimensions(context)
                 

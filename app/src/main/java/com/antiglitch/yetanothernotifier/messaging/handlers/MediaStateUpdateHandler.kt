@@ -196,7 +196,7 @@ class MediaStateUpdateHandler(
                 when (value) {
                     null -> jsonObject.put(key, JSONObject.NULL)
                     is Map<*, *> -> jsonObject.put(key, mapToJsonObject(value as Map<String, Any?>))
-                    is List<*> -> jsonObject.put(key, value)
+                    is List<*> -> jsonObject.put(key, listToJsonArray(value))
                     else -> jsonObject.put(key, value)
                 }
             }
@@ -208,6 +208,22 @@ class MediaStateUpdateHandler(
     }
     
     /**
+     * Convert List to JSONArray
+     */
+    private fun listToJsonArray(list: List<*>): JSONArray {
+        val jsonArray = JSONArray()
+        list.forEach { item ->
+            when (item) {
+                null -> jsonArray.put(JSONObject.NULL)
+                is Map<*, *> -> jsonArray.put(mapToJsonObject(item as Map<String, Any?>))
+                is List<*> -> jsonArray.put(listToJsonArray(item))
+                else -> jsonArray.put(item)
+            }
+        }
+        return jsonArray
+    }
+    
+    /**
      * Convert nested Map to JSONObject
      */
     private fun mapToJsonObject(data: Map<String, Any?>): JSONObject {
@@ -216,7 +232,7 @@ class MediaStateUpdateHandler(
             when (value) {
                 null -> jsonObject.put(key, JSONObject.NULL)
                 is Map<*, *> -> jsonObject.put(key, mapToJsonObject(value as Map<String, Any?>))
-                is List<*> -> jsonObject.put(key, value)
+                is List<*> -> jsonObject.put(key, listToJsonArray(value))
                 else -> jsonObject.put(key, value)
             }
         }
@@ -297,16 +313,21 @@ class MediaStateUpdateHandler(
     private fun playlistToMap(state: MediaContentState): Map<String, Any?> {
         // Enhanced playlist mapping with index information for HA template
         val playlistWithIndex = state.playlist.mapIndexed { index, item ->
-            val baseMap = when (item) {
-                is String -> mapOf("title" to item, "index" to index)
+            when (item) {
+                is String -> mapOf(
+                    "title" to item, 
+                    "index" to index
+                )
                 is MediaItem -> {
-                    val itemMap = mediaItemToMap(item)?.toMutableMap() ?: mutableMapOf()
+                    val itemMap = mediaItemToMap(item)?.toMutableMap() ?: mutableMapOf<String, Any?>()
                     itemMap["index"] = index
-                    itemMap
+                    itemMap.toMap() // Ensure it's a proper Map
                 }
-                else -> mapOf("title" to "Item ${index + 1}", "index" to index)
+                else -> mapOf(
+                    "title" to "Item ${index + 1}", 
+                    "index" to index
+                )
             }
-            baseMap
         }
         
         return mapOf(

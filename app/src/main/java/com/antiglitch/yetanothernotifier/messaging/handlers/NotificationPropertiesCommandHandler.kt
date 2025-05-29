@@ -113,14 +113,7 @@ class NotificationPropertiesCommandHandler(private val context: Context) : Comma
             payload.forEach { (key, value) ->
                 try {
                     when {
-                        key == "screenWidthDp" -> { // Handle screen dimensions separately
-                            receivedScreenWidth = convertToFloat(value)
-                            if (receivedScreenWidth != null) screenDimensionsPotentiallyChanged = true
-                        }
-                        key == "screenHeightDp" -> {
-                            receivedScreenHeight = convertToFloat(value)
-                            if (receivedScreenHeight != null) screenDimensionsPotentiallyChanged = true
-                        }
+
                         modelPropertyDefinitions.containsKey(key) -> {
                             val propertyDefinition = modelPropertyDefinitions[key]!! 
                             val convertedValue: Any? = when (propertyDefinition.defaultValue) {
@@ -208,13 +201,37 @@ class NotificationPropertiesCommandHandler(private val context: Context) : Comma
     
     private fun convertToAspectRatio(value: Any?): AspectRatio? = when (value) {
         is AspectRatio -> value
-        is String -> AspectRatio.values().find { it.name.equals(value, ignoreCase = true) }
+        is String -> {
+            AspectRatio.values().find { enumConstant ->
+                try {
+                    val field = enumConstant::class.java.getDeclaredField("displayName")
+                    field.isAccessible = true
+                    val displayName = field.get(enumConstant) as? String
+                    displayName?.equals(value, ignoreCase = true) == true
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error accessing displayName for AspectRatio ${enumConstant.name}", e)
+                    false
+                }
+            }
+        }
         else -> null
     }
     
     private fun convertToGravity(value: Any?): Gravity? = when (value) {
         is Gravity -> value
-        is String -> Gravity.values().find { it.name.equals(value, ignoreCase = true) }
+        is String -> {
+            Gravity.values().find { enumConstant ->
+                try {
+                    val field = enumConstant::class.java.getDeclaredField("displayName")
+                    field.isAccessible = true
+                    val displayName = field.get(enumConstant) as? String
+                    displayName?.equals(value, ignoreCase = true) == true
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error accessing displayName for Gravity ${enumConstant.name}", e)
+                    false
+                }
+            }
+        }
         else -> null
     }
 

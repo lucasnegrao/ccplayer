@@ -48,10 +48,6 @@ fun NotificationCard(
             RectangleShape
         }
 
-//        val myWebView: WebView = WebView(context) // Or however you get your instance
-//        myWebView.getSettings().javaScriptEnabled = false
-//        myWebView.loadUrl("about:blank")
-
         HybridPlayerComposable(
             player, // Use the player from the service
             shape = shape

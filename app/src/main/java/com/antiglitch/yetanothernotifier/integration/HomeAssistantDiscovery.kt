@@ -32,7 +32,7 @@ class HomeAssistantDiscovery(
         private const val TAG = "HomeAssistantDiscovery"
         private const val HA_DISCOVERY_PREFIX = "homeassistant"
         private const val HA_DEVICE_AUTOMATION_PREFIX = "device_automation"
-        private const val HA_DEVICE_MANUFACTURER = "Antiglitch"
+        private const val HA_DEVICE_MANUFACTURER = "antiglitch"
         private const val HA_DEVICE_MODEL = "YetAnotherNotifier"
         private const val HA_DEVICE_NAME_PREFIX = "YAN "
         private const val HA_OBJECT_ID_PREFIX = "yan_"
@@ -57,8 +57,9 @@ class HomeAssistantDiscovery(
         MqttService.getInstance(context, mqttRepository)
     }
     
-    // Get device ID from MQTT properties instead of generating random UUID
+    // Get device ID from MQTT properties - keep it consistent across runs
     private val deviceId: String by lazy {
+        // Use only the base client ID without random suffix for consistency
         mqttRepository.mqttProperties.value.clientId
     }
     
@@ -253,8 +254,8 @@ class HomeAssistantDiscovery(
         // Load URL text input
         componentDefinitions.add(
             TextDefinition(
-                name = "Enqueue Media URL",
-                uniqueIdSuffix = "enqueue_url",
+                name = "Load URL",
+                uniqueIdSuffix = "load_url",
                 commandTopic = "$commandPrefix/media_load_url",
                 commandTemplate = "{\"url\": \"{{ value }}\"}",
                 icon = "mdi:web",
@@ -264,8 +265,8 @@ class HomeAssistantDiscovery(
 
         componentDefinitions.add(
             TextDefinition(
-                name = "Media URL",
-                uniqueIdSuffix = "load_url",
+                name = "Enqueue URL",
+                uniqueIdSuffix = "enqueue_url",
                 commandTopic = "$commandPrefix/media_enqueue_url",
                 commandTemplate = "{\"url\": \"{{ value }}\"}",
                 icon = "mdi:web",
@@ -278,8 +279,7 @@ class HomeAssistantDiscovery(
         // Dynamically add notification properties
         val notificationProps = notificationPropertiesRepository.dynamicPropertiesMap.value
         notificationProps.forEach { (key, prop) ->
-            // Assuming no 'hidden' field on Property for now. If added, check here:
-            // if (prop.hidden) return@forEach
+             if (prop.hidden) return@forEach
 
             when (prop.defaultValue) {
                 is Boolean -> componentDefinitions.add(
@@ -355,7 +355,18 @@ class HomeAssistantDiscovery(
                     )
                 }
                 is Enum<*> -> {
-                    val options = prop.enumValues?.map { it.name } ?: emptyList()
+                    // All enums have displayName property - use reflection to access it
+                    val options = prop.enumValues?.map { enumValue ->
+                        try {
+                            val field = enumValue::class.java.getDeclaredField("displayName")
+                            field.isAccessible = true
+                            field.get(enumValue) as String
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error accessing displayName for enum ${enumValue::class.simpleName}", e)
+                            enumValue.name // Emergency fallback, but shouldn't happen
+                        }
+                    } ?: emptyList()
+                    
                     if (options.isNotEmpty()) {
                         componentDefinitions.add(
                             SelectDefinition(
@@ -363,10 +374,10 @@ class HomeAssistantDiscovery(
                                 uniqueIdSuffix = "notification_prop_$key",
                                 stateTopic = "$statusPrefix/notification_properties",
                                 commandTopic = "$commandPrefix/update_notification_properties",
-                                valueTemplate = "{{ value_json.$key }}", // Enum is serialized as name
+                                valueTemplate = "{{ value_json.${key}_displayName }}",
                                 commandTemplate = "{\"$key\": \"{{ value }}\"}",
                                 options = options,
-                                icon = "mdi:form-select", // Generic icon
+                                icon = "mdi:form-select",
                                 category = "config"
                             )
                         )
@@ -377,43 +388,6 @@ class HomeAssistantDiscovery(
             }
         }
 
-        // Explicitly add screenWidthDp and screenHeightDp as they are not in dynamicPropertiesMap
-        // but are handled by NotificationPropertiesCommandHandler
-        componentDefinitions.add(
-            NumberDefinition(
-                name = "Notification Screen Width",
-                uniqueIdSuffix = "notification_screen_width_dp",
-                stateTopic = "$statusPrefix/notification_properties",
-                commandTopic = "$commandPrefix/update_notification_properties",
-                valueTemplate = "{{ value_json.screenWidthDp | default(360) }}",
-                commandTemplate = "{\"screenWidthDp\": {{ value }}}}",
-                min = 100, // Example range
-                max = 4000, // Example range
-                step = 1,
-                mode = "box",
-                icon = "mdi:arrow-expand-horizontal",
-                category = "config",
-                unitOfMeasurement = "dp"
-            )
-        )
-        componentDefinitions.add(
-            NumberDefinition(
-                name = "Notification Screen Height",
-                uniqueIdSuffix = "notification_screen_height_dp",
-                stateTopic = "$statusPrefix/notification_properties",
-                commandTopic = "$commandPrefix/update_notification_properties",
-                valueTemplate = "{{ value_json.screenHeightDp | default(640) }}",
-                commandTemplate = "{\"screenHeightDp\": {{ value }}}}",
-                min = 100, // Example range
-                max = 4000, // Example range
-                step = 1,
-                mode = "box",
-                icon = "mdi:arrow-expand-vertical",
-                category = "config",
-                unitOfMeasurement = "dp"
-            )
-        )
-        
         // Show notification command
         componentDefinitions.add(
             TextDefinition(
@@ -503,9 +477,10 @@ class HomeAssistantDiscovery(
      * Create the device configuration JSON
      */
     private fun createDeviceConfigJson(): JSONObject {
-        val safeDeviceIdSuffix = deviceId.replace(Regex("[^a-zA-Z0-9_-]"), "_").takeLast(12)
+        val safeDeviceIdSuffix = deviceId.replace(Regex("[^a-zA-Z0-9_-]"), "_").takeLast(20)
         return JSONObject().apply {
-            put("identifiers", JSONArray().put("${HA_OBJECT_ID_PREFIX}${deviceId}"))
+            // Use a consistent device identifier - this is KEY for grouping
+            put("identifiers", JSONArray().put("${HA_OBJECT_ID_PREFIX}device_${deviceId}"))
             put("name", "$HA_DEVICE_NAME_PREFIX$safeDeviceIdSuffix")
             put("manufacturer", HA_DEVICE_MANUFACTURER)
             put("model", HA_DEVICE_MODEL)
@@ -524,11 +499,12 @@ class HomeAssistantDiscovery(
     ): JSONObject {
         return JSONObject().apply {
             put("name", name)
-            put("unique_id", "${baseUniqueId}_$uniqueIdSuffix")
+            // Use deviceId for unique entity IDs but keep device identifier consistent
+            put("unique_id", "${baseUniqueId}_${uniqueIdSuffix}")
             put("availability_topic", availabilityTopic)
             put("payload_available", HA_PAYLOAD_AVAILABLE)
             put("payload_not_available", HA_PAYLOAD_NOT_AVAILABLE)
-            put("device", deviceJson)
+            put("device", deviceJson) // This deviceJson must have consistent identifiers
             icon?.let { put("icon", it) }
             category?.let { put("entity_category", it) }
         }

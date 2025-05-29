@@ -324,13 +324,6 @@ fun HybridPlayerComposable(
         }
     }
 
-    // Test status message display (remove this after testing)
-    LaunchedEffect(viewState) {
-        if (viewState == HybridViewState.LOADING) {
-            Log.d("HybridPlayer", "Setting test status message for LOADING state")
-            statusMessage = StatusMessage("Loading content...", false, true)
-        }
-    }
 
     Box(
         modifier = modifier

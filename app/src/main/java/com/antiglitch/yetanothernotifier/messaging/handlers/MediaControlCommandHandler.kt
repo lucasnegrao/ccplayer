@@ -41,6 +41,7 @@ class MediaControlCommandHandler(
         private const val LOAD_URL = "media_load_url"
         private const val ENQUEUE_URL = "media_enqueue_url"
         private const val GET_QUEUE = "media_get_queue"
+        private const val PLAY_FROM_QUEUE = "media_play_from_queue" // New action
     }
     
     private val messageHandler by lazy {
@@ -99,6 +100,7 @@ class MediaControlCommandHandler(
             LOAD_URL -> handleLoadUrl(command.payload)
             ENQUEUE_URL -> handleEnqueueUrl(command.payload)
             GET_QUEUE -> handleGetQueue()
+            PLAY_FROM_QUEUE -> handlePlayFromQueue(command.payload) // New handler call
             else -> CommandResult.Error("Unknown media action: ${command.action}")
         }
     }
@@ -179,7 +181,7 @@ class MediaControlCommandHandler(
             
             // Wait briefly for media info to update
             delay(500)
-            sendMediaMetadataUpdate()
+            // sendMediaMetadataUpdate()
             
             CommandResult.Success()
         } catch (e: Exception) {
@@ -199,7 +201,7 @@ class MediaControlCommandHandler(
             
             // Wait briefly for media info to update
             delay(500)
-            sendMediaMetadataUpdate()
+            // sendMediaMetadataUpdate()
             
             CommandResult.Success()
         } catch (e: Exception) {
@@ -424,6 +426,37 @@ class MediaControlCommandHandler(
     }
     
     /**
+     * Handle play from queue command
+     */
+    private suspend fun handlePlayFromQueue(payload: Map<String, Any?>): CommandResult = withContext(Dispatchers.Main) {
+        val controller = hybridMediaController?.mediaController ?:
+            return@withContext CommandResult.Error("No media controller available")
+
+        val titleToPlay = payload["title"] as? String
+            ?: return@withContext CommandResult.Error("Missing or invalid 'title' in payload")
+
+        var itemFound = false
+        for (i in 0 until controller.mediaItemCount) {
+            val mediaItem = controller.getMediaItemAt(i)
+            if (mediaItem.mediaMetadata.title?.toString() == titleToPlay) {
+                controller.seekTo(i, 0L) // Seek to the beginning of the item
+                controller.play() // Ensure playback starts
+                itemFound = true
+                break
+            }
+        }
+
+        return@withContext if (itemFound) {
+            // Wait briefly for playback state and metadata to update
+            delay(500)
+            sendMediaStateUpdate() // This will also trigger media_item and media_queue updates
+            CommandResult.Success(mapOf("playedFromQueue" to titleToPlay))
+        } else {
+            CommandResult.Error("Media item with title '$titleToPlay' not found in queue.")
+        }
+    }
+    
+    /**
      * Handle get queue command
      */
     private suspend fun handleGetQueue(): CommandResult = withContext(Dispatchers.Main) {
@@ -470,6 +503,9 @@ class MediaControlCommandHandler(
         stateInfo["volume"] = controller.volume
         stateInfo["currentMediaItemIndex"] = controller.currentMediaItemIndex
         stateInfo["mediaItemCount"] = controller.mediaItemCount
+        
+        // Add active queue item title for HA select component
+        stateInfo["active_queue_item_title"] = controller.currentMediaItem?.mediaMetadata?.title?.toString()
         
         return stateInfo
     }
@@ -615,22 +651,22 @@ class MediaControlCommandHandler(
      * Send media state update as an internal command
      */
     private fun sendMediaStateUpdate() {
-        hybridMediaController?.mediaController?.let { controller ->
-            val stateInfo = getMediaStateInfo(controller)
-            messageHandler.sendInternalCommand("media_state_update", stateInfo)
-            messageHandler.broadcastUpdate("media_state", stateInfo)
+        // hybridMediaController?.mediaController?.let { controller ->
+        //     val stateInfo = getMediaStateInfo(controller)
+        //     messageHandler.sendInternalCommand("media_state_update", stateInfo)
+        //     messageHandler.broadcastUpdate("media_state", stateInfo)
             
-            // Send current media item on separate topic if available
-            controller.currentMediaItem?.let { mediaItem ->
-                val serializedMediaItem = serializeMediaItem(mediaItem)
-                messageHandler.sendInternalCommand("media_item_update", serializedMediaItem)
-                messageHandler.broadcastUpdate("media_item", serializedMediaItem)
-            }
+        //     // Send current media item on separate topic if available
+        //     controller.currentMediaItem?.let { mediaItem ->
+        //         val serializedMediaItem = serializeMediaItem(mediaItem)
+        //         messageHandler.sendInternalCommand("media_item_update", serializedMediaItem)
+        //         messageHandler.broadcastUpdate("media_item", serializedMediaItem)
+        //     }
             
-            // Also send queue update when state changes
-            val queueInfo = getQueueInfo(controller)
-            messageHandler.sendInternalCommand("media_queue_update", queueInfo)
-        }
+        //     // Also send queue update when state changes
+        //     val queueInfo = getQueueInfo(controller)
+        //     messageHandler.sendInternalCommand("media_queue_update", queueInfo)
+        // }
     }
     
     /**

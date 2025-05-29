@@ -4,26 +4,31 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import kotlin.reflect.KProperty
 
 data class MediaTransportState(
     val playbackState: Int = Player.STATE_IDLE,
-    val playbackStateString: String = getPlaybackStateString(Player.STATE_IDLE),
     val playWhenReady: Boolean = false,
     val isPlaying: Boolean = false,
+    val isLoading: Boolean = false, // Add isLoading property
     val currentPosition: Long = 0L,
     val duration: Long = 0L,
     val bufferedPosition: Long = 0L,
     val playbackSpeed: Float = 1.0f,
     val repeatMode: Int = Player.REPEAT_MODE_OFF,
-    val repeatModeString: String = getRepeatModeString(Player.REPEAT_MODE_OFF),
-    val shuffleModeEnabled: Boolean = false
+    val shuffleModeEnabled: Boolean = false,
+    // Update playbackStateString to use the instance's playbackState, isPlaying, and isLoading
+    val playbackStateString: String = getPlaybackStateString(playbackState, isPlaying, isLoading),
+    val repeatModeString: String = getRepeatModeString(Player.REPEAT_MODE_OFF)
 ) {
     companion object {
-        fun getPlaybackStateString(state: Int): String = when (state) {
-            Player.STATE_IDLE -> "IDLE"
-            Player.STATE_BUFFERING -> "BUFFERING"
-            Player.STATE_READY -> "READY"
-            Player.STATE_ENDED -> "ENDED"
+        // Modify getPlaybackStateString to accept isLoading parameter
+        fun getPlaybackStateString(state: Int, isPlaying: Boolean, isLoading: Boolean): String = when {
+            isLoading -> "LOADING" // Check isLoading first
+            state == Player.STATE_IDLE -> "IDLE"
+            state == Player.STATE_BUFFERING -> "BUFFERING"
+            state == Player.STATE_READY -> if (isPlaying) "PLAYING" else "PAUSED"
+            state == Player.STATE_ENDED -> "ENDED"
             else -> "UNKNOWN"
         }
         
@@ -33,6 +38,10 @@ data class MediaTransportState(
             Player.REPEAT_MODE_ALL -> "ALL"
             else -> "UNKNOWN"
         }
+    }
+
+    operator fun getValue(thisRef: Any?, property: KProperty<*>): MediaTransportState {
+        return this
     }
 }
 

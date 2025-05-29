@@ -43,7 +43,7 @@ class YtDlpService private constructor(
     
     // Initialization state
     @Volatile
-    private var isInitialized = false
+    internal var isInitialized = false
     @Volatile
     private var initializationFailed = false
     private val initializationCallbacks = mutableListOf<(Boolean) -> Unit>()

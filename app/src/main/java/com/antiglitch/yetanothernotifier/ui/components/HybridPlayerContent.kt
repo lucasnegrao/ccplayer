@@ -11,6 +11,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -22,6 +25,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.session.MediaController
 import com.antiglitch.yetanothernotifier.player.ExoPlayerComposable
+import com.antiglitch.yetanothernotifier.repository.MediaControllerStateRepository
 import com.antiglitch.yetanothernotifier.utils.StreamType
 
 @Composable
@@ -43,6 +47,12 @@ fun HybridPlayerContent(
     onStateChange: (HybridViewState) -> Unit,
     createWebView: () -> WebView
 ) {
+    // Access state repository for debugging/monitoring
+    val stateRepository = remember { MediaControllerStateRepository.getInstance() }
+    val transportState by stateRepository.transportState.collectAsState()
+    
+    Log.d("HybridPlayer", "HybridPlayerContent - viewState: $viewState, transport: ${transportState.playbackStateString}")
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -145,13 +155,6 @@ private fun WebViewContent(
                     Log.d("HybridPlayer", "WebView created and configured, resuming.")
                     wv.onResume()
                     wv.resumeTimers()
-
-//                    // Load pending content immediately if available
-//                    pendingWebViewLoad?.let { (url, streamType) ->
-//                        Log.d("HybridPlayer", "Loading pending content in new WebView: $url")
-//                        loadInWebView(wv, url, streamType)
-//                        onWebViewLoadCleared()
-//                    }
                 }
             },
             modifier = Modifier

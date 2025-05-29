@@ -284,7 +284,19 @@ class MessageHandlingService private constructor(context: Context) {
         
         Log.d(TAG, "Broadcasting update to topic: yan/status/$topic")
     }
-    
+    // Add these methods to MessageHandlingService class
+suspend fun broadcastMediaUpdates() {
+    // Implement broadcasting of current media state
+    Log.d("MessageHandlingService", "Broadcasting media updates")
+    // Send current media state via MQTT if connected
+    // sendInternalCommand("media_state_update", ")
+}
+
+suspend fun broadcastNotificationStatus() {
+    // Implement broadcasting of current notification status
+    Log.d("MessageHandlingService", "Broadcasting notification status")
+    // Send current notification states via MQTT if connected
+}
     /**
      * Convenience method for broadcasting media-related updates
      * This is a specialized version of broadcastUpdate for media state changes

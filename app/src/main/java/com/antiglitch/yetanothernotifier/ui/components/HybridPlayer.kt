@@ -41,8 +41,12 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.media3.exoplayer.ExoPlayer
 import android.os.Build
 import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.unit.dp
 import com.antiglitch.yetanothernotifier.player.ExoPlayerComposable
+import com.antiglitch.yetanothernotifier.repository.MediaControllerStateRepository
+import com.antiglitch.yetanothernotifier.repository.MediaTransportState
+import com.antiglitch.yetanothernotifier.repository.MediaContentState
 import com.antiglitch.yetanothernotifier.utils.StreamType
 
 enum class HybridViewState {
@@ -76,7 +80,12 @@ fun HybridPlayerComposable(
     var pendingWebViewLoad by remember { mutableStateOf<Pair<String, String>?>(null) }
     var webViewKey by remember { mutableStateOf(0) }
     val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
+    
+    // Access state repository
+    val stateRepository = remember { MediaControllerStateRepository.getInstance() }
+    val transportState by stateRepository.transportState.collectAsState()
+    val contentState by stateRepository.contentState.collectAsState()
+    val errorState by stateRepository.errorState.collectAsState()
 
     Log.d("HybridPlayer", "Composable recomposed - mediaController: $mediaController, viewState: $viewState")
 
@@ -92,7 +101,7 @@ fun HybridPlayerComposable(
                         (currentMediaItem?.mediaMetadata?.extras?.getString("content_type") != StreamType.VIDEO.name &&
                          currentMediaItem?.mediaMetadata?.extras?.getString("content_type") != StreamType.RTSP.name)) {
                         Log.d("HybridPlayer", "WebView page started - setting state to WEBVIEW_ACTIVE")
-                        viewState = HybridViewState.WEBVIEW_ACTIVE 
+                        viewState = HybridViewState.WEBVIEW_ACTIVE
                     } else {
                         Log.d("HybridPlayer", "WebView page started but ignoring state change (current state: $viewState, content type: ${currentMediaItem?.mediaMetadata?.extras?.getString("content_type")})")
                     }
@@ -104,6 +113,7 @@ fun HybridPlayerComposable(
                          currentMediaItem?.mediaMetadata?.extras?.getString("content_type") != StreamType.RTSP.name)) {
                         Log.d("HybridPlayer", "Setting state from LOADING to WEBVIEW_ACTIVE")
                         viewState = HybridViewState.WEBVIEW_ACTIVE
+                        mediaController?.play()
                     } else {
                         Log.d("HybridPlayer", "WebView page finished but ignoring state change")
                     }
@@ -124,143 +134,78 @@ fun HybridPlayerComposable(
     // Stabilize current media item to prevent unnecessary reloads
     val currentMediaItemStable = rememberUpdatedState(currentMediaItem)
 
-    // Handle media controller changes and listeners
-    LaunchedEffect(mediaController) {
-        Log.d("HybridPlayer", "LaunchedEffect for mediaController: $mediaController")
-        mediaController?.let { controller ->
-            Log.d("HybridPlayer", "Adding listener to media controller")
-            val listener = object : Player.Listener {
-                override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                    Log.d("HybridPlayer", "Media item transition: ${mediaItem?.mediaId}, reason: $reason")
-                    // Only process if media item actually changed
-                    if (currentMediaItemStable.value?.mediaId != mediaItem?.mediaId) {
-                        handleCurrentMediaItemDisplay(
-                            mediaItem = mediaItem,
-                            onStateChange = { newState -> 
-                                Log.d("HybridPlayer", "State change: $viewState -> $newState")
-                                // Only force WebView recreation for significant state changes
-                                if (newState == HybridViewState.WEBVIEW_ACTIVE && 
-                                    viewState == HybridViewState.PLAYER_ACTIVE) {
-                                    webViewKey++
-                                    webView = null
-                                }
-                                viewState = newState 
-                            },
-                            onMediaItemChange = { item -> 
-                                Log.d("HybridPlayer", "Media item changed: ${item?.mediaId}")
-                                currentMediaItem = item 
-                            },
-                            onWebViewLoad = { url, contentType ->
-                                Log.d("HybridPlayer", "WebView load requested: $url, type: $contentType")
-                                pendingWebViewLoad = Pair(url, contentType)
-                            }
-                        )
+    // Listen to state changes from repository for UI updates only
+    LaunchedEffect(contentState.currentMediaItem) {
+        val newMediaItem = contentState.currentMediaItem
+        if (newMediaItem?.mediaId != currentMediaItem?.mediaId) {
+            Log.d("HybridPlayer", "Media item changed via state repository: ${newMediaItem?.mediaId}")
+            handleCurrentMediaItemDisplay(
+                mediaItem = newMediaItem,
+                onStateChange = { newState -> 
+                    if (newState == HybridViewState.WEBVIEW_ACTIVE && viewState == HybridViewState.PLAYER_ACTIVE) {
+                        webViewKey++
+                        webView = null
                     }
-                }
-
-                override fun onPlayerError(error: PlaybackException) {
-                    val errorMessage = "Playback failed: ${error.message}"
-                    Log.d("HybridPlayer", "$errorMessage, ${androidx.media3.exoplayer.ExoPlaybackException.getErrorCodeName(error.errorCode)}")
-
-                    if (error.errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED) {
-                        currentMediaItem?.localConfiguration?.uri?.let { uri ->
-                            Log.d("HybridPlayer", "Falling back to WebView for unsupported format")
-                            webView?.loadUrl(uri.toString())
-                            viewState = HybridViewState.LOADING
-                        } ?: run {
-                            statusMessage = StatusMessage("Unsupported media format", true, true)
-                            viewState = HybridViewState.ERROR
-                        }
-                    } else {
-                        statusMessage = StatusMessage("Video playback error", true, true)
-                        viewState = HybridViewState.ERROR
-                    }
-                }
-
-                override fun onPlaybackStateChanged(playbackState: Int) {
-                    when (playbackState) {
-                        Player.STATE_BUFFERING -> {
-                            if (viewState != HybridViewState.ERROR) {
-                                viewState = HybridViewState.LOADING
-                            }
-                        }
-                        Player.STATE_READY -> {
-                            val contentType = currentMediaItem?.mediaMetadata?.extras?.getString("content_type")
-                            if ((contentType == StreamType.VIDEO.name || contentType == StreamType.RTSP.name) && 
-                                controller.isPlaying) {
-                                Log.d("HybridPlayer", "Playback is ready, setting state to PLAYER_ACTIVE")
-                                viewState = HybridViewState.PLAYER_ACTIVE
-                            } else if (contentType != StreamType.VIDEO.name && contentType != StreamType.RTSP.name) {
-                                Log.d("HybridPlayer", "Playback is ready but content type is $contentType, setting state to WEBVIEW_ACTIVE")
-                                viewState = HybridViewState.WEBVIEW_ACTIVE
-                            }
-                        }
-                        Player.STATE_ENDED -> {
-                            viewState = HybridViewState.NONE
-                        }
-                        Player.STATE_IDLE -> {
-                            if (viewState != HybridViewState.ERROR) {
-                                viewState = HybridViewState.NONE
-                            }
-                        }
-                    }
-                }
-            }
-            
-            controller.addListener(listener)
-            
-            // Trigger initial display if there's already a current media item
-            val initialMediaItem = controller.currentMediaItem
-            if (initialMediaItem != null && currentMediaItem?.mediaId != initialMediaItem.mediaId) {
-                Log.d("HybridPlayer", "Controller has initial media item: ${initialMediaItem.mediaId}")
-                handleCurrentMediaItemDisplay(
-                    mediaItem = initialMediaItem,
-                    onStateChange = { newState -> 
-                        Log.d("HybridPlayer", "Initial state change: $viewState -> $newState")
-                        if (newState == HybridViewState.WEBVIEW_ACTIVE && viewState == HybridViewState.PLAYER_ACTIVE) {
-                            webViewKey++
-                            webView = null
-                        }
-                        viewState = newState 
-                    },
-                    onMediaItemChange = { item -> 
-                        Log.d("HybridPlayer", "Initial media item: ${item?.mediaId}")
-                        currentMediaItem = item 
-                    },
-                    onWebViewLoad = { url, contentType ->
-                        Log.d("HybridPlayer", "Initial WebView load: $url, type: $contentType")
-                        pendingWebViewLoad = Pair(url, contentType)
-                    }
-                )
-            } else {
-                Log.d("HybridPlayer", "Controller has no initial media item or same as current")
-            }
-        } ?: Log.w("HybridPlayer", "MediaController is null, no listener added")
+                    viewState = newState 
+                },
+                onMediaItemChange = { item -> currentMediaItem = item },
+                onWebViewLoad = { url, contentType -> pendingWebViewLoad = Pair(url, contentType) }
+            )
+        }
     }
-
-    // Load pending WebView content when WebView becomes available
-    LaunchedEffect(webView, pendingWebViewLoad) {
-        if (webView != null && pendingWebViewLoad != null) {
-            val (url, contentType) = pendingWebViewLoad!!
-            Log.d("HybridPlayer", "Loading pending WebView content: $url, type: $contentType")
-            loadInWebView(webView!!, url, contentType)
-            pendingWebViewLoad = null
+    
+    // Handle transport state changes for UI
+    LaunchedEffect(transportState.playbackState, transportState.isPlaying) {
+        when (transportState.playbackState) {
+            Player.STATE_BUFFERING -> {
+                if (viewState != HybridViewState.ERROR && viewState != HybridViewState.WEBVIEW_ACTIVE) {
+                    viewState = HybridViewState.LOADING
+                }
+            }
+            Player.STATE_READY -> {
+                val contentType = currentMediaItem?.mediaMetadata?.extras?.getString("content_type")
+                if ((contentType == StreamType.VIDEO.name || contentType == StreamType.RTSP.name) && 
+                    transportState.isPlaying) {
+                    Log.d("HybridPlayer", "Playback is ready, setting state to PLAYER_ACTIVE")
+                    viewState = HybridViewState.PLAYER_ACTIVE
+                } else if (contentType != StreamType.VIDEO.name && contentType != StreamType.RTSP.name) {
+                    Log.d("HybridPlayer", "Playback is ready but content type is $contentType, maintaining WebView state")
+                    if (viewState != HybridViewState.WEBVIEW_ACTIVE) {
+                        viewState = HybridViewState.WEBVIEW_ACTIVE
+                    }
+                }
+            }
+            Player.STATE_ENDED -> {
+                viewState = HybridViewState.NONE
+            }
+            Player.STATE_IDLE -> {
+                if (viewState != HybridViewState.ERROR) {
+                    viewState = HybridViewState.NONE
+                }
+            }
+        }
+    }
+    
+    // Handle errors from state repository
+    LaunchedEffect(errorState.error) {
+        errorState.error?.let { error ->
+            Log.e("HybridPlayer", "Error from state repository: ${errorState.errorMessage}")
+            statusMessage = StatusMessage("Playback error: ${errorState.errorMessage}", true, true)
+            viewState = HybridViewState.ERROR
         }
     }
 
-    // Handle status message auto-hide
-    LaunchedEffect(statusMessage) {
-        Log.d("HybridPlayer", "Status message LaunchedEffect triggered: ${statusMessage}")
-        if (statusMessage.isVisible && !statusMessage.isError) {
-            Log.d("HybridPlayer", "Status message will auto-hide in 5 seconds")
-            delay(5000)
-            statusMessage = statusMessage.copy(isVisible = false)
-            Log.d("HybridPlayer", "Status message auto-hidden (non-error)")
-        } else if (statusMessage.isVisible && statusMessage.isError) {
-            Log.d("HybridPlayer", "Error status message will auto-hide in 10 seconds")
-            delay(10000)
-            statusMessage = statusMessage.copy(isVisible = false)
-            Log.d("HybridPlayer", "Status message auto-hidden (error)")
+    // Update WebView states when WebView becomes active
+    LaunchedEffect(viewState, webView) {
+        if (viewState == HybridViewState.WEBVIEW_ACTIVE && webView != null) {
+            Log.d("HybridPlayer", "WebView is active, updating transport state")
+            updateWebViewPlaybackState(stateRepository, Player.STATE_READY, isPlaying = true)
+        } else if (viewState == HybridViewState.LOADING && currentMediaItem != null) {
+            val contentType = currentMediaItem?.mediaMetadata?.extras?.getString("content_type")
+            if (contentType != StreamType.VIDEO.name && contentType != StreamType.RTSP.name) {
+                Log.d("HybridPlayer", "WebView content loading, updating transport state")
+                updateWebViewPlaybackState(stateRepository, Player.STATE_BUFFERING)
+            }
         }
     }
 
@@ -328,7 +273,16 @@ fun HybridPlayerComposable(
         keepScreenOn = keepScreenOn,
         videoTranslucency = videoTranslucency,
         shape = shape,
-        onWebViewCreated = { newWebView -> webView = newWebView },
+        onWebViewCreated = { newWebView -> 
+            webView = newWebView
+            // Update state when WebView is created for non-video content
+            if (viewState == HybridViewState.LOADING && currentMediaItem != null) {
+                val contentType = currentMediaItem?.mediaMetadata?.extras?.getString("content_type")
+                if (contentType != StreamType.VIDEO.name && contentType != StreamType.RTSP.name) {
+                    updateWebViewPlaybackState(stateRepository, Player.STATE_READY, isPlaying = true)
+                }
+            }
+        },
         onWebViewLoadCleared = { pendingWebViewLoad = null },
         onStateChange = { newState ->
             if (newState == HybridViewState.WEBVIEW_ACTIVE && viewState == HybridViewState.PLAYER_ACTIVE) {
@@ -341,13 +295,39 @@ fun HybridPlayerComposable(
     )
 }
 
+// Helper function to manually update WebView playback states
+private fun updateWebViewPlaybackState(
+    stateRepository: MediaControllerStateRepository,
+    playbackState: Int,
+    isPlaying: Boolean = false,
+    isLoading: Boolean = false,
+    position: Long = 0L
+) {
+
+    stateRepository.updateTransportState(
+        MediaTransportState(
+            playbackState = playbackState,
+            playbackStateString = MediaTransportState.getPlaybackStateString(playbackState,isPlaying,isLoading),
+            playWhenReady = isPlaying,
+            isPlaying = isPlaying,
+            currentPosition = position,
+            duration = -1L, // Unknown duration for WebView content
+            bufferedPosition = if (playbackState == Player.STATE_READY) -1L else 0L,
+            playbackSpeed = 1.0f,
+            repeatMode = Player.REPEAT_MODE_OFF,
+            repeatModeString = MediaTransportState.getRepeatModeString(Player.REPEAT_MODE_OFF),
+            shuffleModeEnabled = false
+        )
+    )
+}
+
 private fun createWebViewInstance(
     context: android.content.Context,
     onPageStarted: () -> Unit,
     onPageFinished: () -> Unit,
     onError: (String) -> Unit
 ): WebView {
-     return WebView(context).apply {
+    return WebView(context).apply {
           settings.apply {
               javaScriptEnabled = true
               domStorageEnabled = true
@@ -387,13 +367,14 @@ private fun createWebViewInstance(
         webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                 super.onPageStarted(view, url, favicon)
+                Log.d("HybridPlayer", "WebView page started - updating state to buffering")
                 onPageStarted()
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
-                // Removed JavaScript injection
-                onPageFinished() // Call the original callback
+                Log.d("HybridPlayer", "WebView page finished - updating state to ready")
+                onPageFinished()
             }
 
             override fun onReceivedError(
@@ -402,13 +383,12 @@ private fun createWebViewInstance(
                 description: String?,
                 failingUrl: String?
             ) {
-                onError("WebView error: $description")
                 Log.e("HybridPlayer", "WebView error $errorCode: $description for $failingUrl")
+                onError("WebView error: $description")
             }
 
-            // Prevent new windows/popups that might trigger clipboard access
             override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
-                return false // Let WebView handle the URL
+                return false
             }
         }
 

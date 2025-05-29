@@ -52,6 +52,7 @@ class HybridMediaController(
     private val positionUpdateHandler = Handler(Looper.getMainLooper())
     private var positionUpdateRunnable: Runnable? = null
     private var isPositionTimerActive = false
+    private var isProcessingLoadUrl: Boolean = false // Added property
 
     companion object {
         var sessionToken: SessionToken? = null
@@ -151,6 +152,11 @@ class HybridMediaController(
             }
 
             override fun onPlayerError(error: PlaybackException) {
+                val wasProcessingLoadUrl = isProcessingLoadUrl
+                if (wasProcessingLoadUrl) {
+                    isProcessingLoadUrl = false
+                }
+
                 stateRepository.updateErrorState(
                     MediaErrorState(
                         error = error,
@@ -159,6 +165,25 @@ class HybridMediaController(
                         errorCodeString = MediaErrorState.getErrorCodeString(error.errorCode)
                     )
                 )
+
+                if (wasProcessingLoadUrl) {
+                    // Get current player state safely
+                    val currentPlaybackState = mediaController?.playbackState ?: Player.STATE_IDLE
+                    val currentIsPlaying = mediaController?.isPlaying ?: false
+                    
+                    stateRepository.updateTransportState(
+                        stateRepository.transportState.value.copy(
+                            isLoading = false, // Explicitly false
+                            playbackState = currentPlaybackState,
+                            isPlaying = currentIsPlaying,
+                            playbackStateString = MediaTransportState.getPlaybackStateString(
+                                currentPlaybackState,
+                                currentIsPlaying,
+                                false // isLoading is now false
+                            )
+                        )
+                    )
+                }
             }
         })
     }
@@ -206,19 +231,33 @@ class HybridMediaController(
 
     private fun updateTransportState() {
         mediaController?.let { controller ->
+            if (isProcessingLoadUrl) {
+                val playerIsReady = controller.playbackState == Player.STATE_READY
+                val playerIsPlaying = controller.isPlaying && playerIsReady
+                val playbackHasEnded = controller.playbackState == Player.STATE_ENDED
+                // Item is loaded and ready for manual play if player is ready, not set to auto-play, and an item exists
+                val itemIsLoadedAndReadyForManualPlay = playerIsReady && !controller.playWhenReady && controller.currentMediaItem != null
+
+                if (playerIsPlaying || playbackHasEnded || itemIsLoadedAndReadyForManualPlay) {
+                    isProcessingLoadUrl = false
+                }
+            }
+
+            val finalIsLoadingForState = isProcessingLoadUrl
+
             stateRepository.updateTransportState(
                 MediaTransportState(
                     playbackState = controller.playbackState,
-                    playbackStateString = MediaTransportState.getPlaybackStateString(controller.playbackState),
                     playWhenReady = controller.playWhenReady,
                     isPlaying = controller.isPlaying,
+                    isLoading = finalIsLoadingForState, // Pass the determined isLoading
                     currentPosition = controller.currentPosition,
                     duration = controller.duration,
                     bufferedPosition = controller.bufferedPosition,
                     playbackSpeed = controller.playbackParameters.speed,
                     repeatMode = controller.repeatMode,
-                    repeatModeString = MediaTransportState.getRepeatModeString(controller.repeatMode),
                     shuffleModeEnabled = controller.shuffleModeEnabled
+                    // playbackStateString and repeatModeString will be derived by MediaTransportState constructor
                 )
             )
         }
@@ -267,17 +306,32 @@ class HybridMediaController(
 
     @OptIn(UnstableApi::class)
     override fun loadUrl(url: String) {
+        isProcessingLoadUrl = true
+        stateRepository.updateTransportState(
+            stateRepository.transportState.value.copy(isLoading = true)
+        )
         callback.onLoadRequest()
+
         CoroutineScope(Dispatchers.Main).launch {
             val mediaItem = createMediaItemFromUrl(url)
             mediaItem?.let { item ->
+                val streamTypeString = item.mediaMetadata.extras?.getString("content_type")
+                val isVideoOrRtsp = streamTypeString == StreamType.VIDEO.name || streamTypeString == StreamType.RTSP.name
+
                 mediaController?.apply {
                     clearMediaItems()
                     setMediaItem(item)
-                    playWhenReady = true
+                    playWhenReady = isVideoOrRtsp // Only play immediately if video or RTSP
                     prepare()
                     callback.onMediaLoaded(item)
                 }
+            } ?: run {
+                // If mediaItem is null (e.g., error in createMediaItemFromUrl)
+                isProcessingLoadUrl = false
+                stateRepository.updateTransportState(
+                    stateRepository.transportState.value.copy(isLoading = false)
+                )
+                // Optionally call callback.onError here
             }
         }
     }

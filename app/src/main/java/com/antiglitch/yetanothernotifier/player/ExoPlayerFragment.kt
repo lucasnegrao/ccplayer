@@ -142,25 +142,25 @@ private fun MediaPlayerScreen(
             modifier = scaledModifier.noRippleClickable { showControls = !showControls },
         )
 
-        if (presentationState.coverSurface) {
-            // Cover the surface that is being prepared with a shutter
-            // Do not use scaledModifier here, makes the Box be measured at 0x0
-            Box(Modifier
-              .matchParentSize()
-              .background(Color.Black))
-        }
+        // if (presentationState.coverSurface) {
+        //     // Cover the surface that is being prepared with a shutter
+        //     // Do not use scaledModifier here, makes the Box be measured at 0x0
+        //     Box(Modifier
+        //       .matchParentSize()
+        //       .background(Color.Black))
+        // }
 
-        if (showControls) {
-            // drawn on top of a potential shutter
-            MinimalControls(player, Modifier.align(Alignment.Center))
-            ExtraControls(
-                player,
-                Modifier
-                  .fillMaxWidth()
-                  .align(Alignment.BottomCenter)
-                  .background(Color.Gray.copy(alpha = 0.4f))
-                  .navigationBarsPadding(),
-            )
-        }
+        // if (showControls) {
+        //     // drawn on top of a potential shutter
+        //     MinimalControls(player, Modifier.align(Alignment.Center))
+        //     ExtraControls(
+        //         player,
+        //         Modifier
+        //           .fillMaxWidth()
+        //           .align(Alignment.BottomCenter)
+        //           .background(Color.Gray.copy(alpha = 0.4f))
+        //           .navigationBarsPadding(),
+        //     )
+        // }
     }
 }

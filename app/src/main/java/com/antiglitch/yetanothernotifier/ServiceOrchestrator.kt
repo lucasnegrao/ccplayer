@@ -27,6 +27,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeout
 import java.lang.ref.WeakReference
 
 class ServiceOrchestrator private constructor(context: Context) {
@@ -67,7 +69,7 @@ class ServiceOrchestrator private constructor(context: Context) {
     // MediaController state
     private val _mediaControllerReady = MutableStateFlow(false)
     val mediaControllerReady: StateFlow<Boolean> = _mediaControllerReady.asStateFlow()
-    
+
     // Screen dimensions
     var screenWidthPx: Float = 0f
         private set
@@ -91,6 +93,39 @@ class ServiceOrchestrator private constructor(context: Context) {
     // Handler references
     private var mediaControlCommandHandler: MediaControlCommandHandler? = null
     
+    // Initialization progress tracking
+    data class InitializationStep(
+        val name: String,
+        val description: String,
+        var completed: Boolean = false,
+        var error: String? = null
+    )
+    
+    private val _initializationProgress = MutableStateFlow(0f)
+    val initializationProgress: StateFlow<Float> = _initializationProgress.asStateFlow()
+    
+    private val _currentStep = MutableStateFlow("")
+    val currentStep: StateFlow<String> = _currentStep.asStateFlow()
+    
+    private val initializationSteps = listOf(
+        InitializationStep("screen_calc", "Calculating screen dimensions"),
+        InitializationStep("repositories", "Initializing repositories"),
+        InitializationStep("media_controller", "Setting up media controller"),
+        InitializationStep("screen_update", "Updating screen dimensions"),
+        InitializationStep("overlay_service", "Starting overlay service"),
+        InitializationStep("mqtt_service", "Connecting MQTT service"),
+        InitializationStep("mqtt_monitoring", "Setting up MQTT monitoring"),
+        InitializationStep("broadcast_updates", "Broadcasting current states"),
+        InitializationStep("complete", "Initialization complete")
+    )
+    
+    // Step completion flags
+    private var repositoriesReady = false
+    private var mediaControllerInitialized = false
+    private var screenDimensionsReady = false
+    private var overlayServiceReady = false
+    private var mqttServiceReady = false
+    
     /**
      * Initialize all services and repositories in the correct order
      */
@@ -106,41 +141,81 @@ class ServiceOrchestrator private constructor(context: Context) {
             return
         }
         
+        // Reset progress tracking
+        initializationSteps.forEach { it.completed = false; it.error = null }
+        repositoriesReady = false
+        mediaControllerInitialized = false
+        screenDimensionsReady = false
+        overlayServiceReady = false
+        mqttServiceReady = false
+        
         orchestratorScope.launch {
             try {
                 Log.d(TAG, "Starting initialization sequence")
-
+                
                 // Step 1: Calculate screen dimensions
-                calculateScreenDimensions(context)
+                if (!executeStep(0) { calculateScreenDimensions(context) }) return@launch
                 
-                // Step 2: Initialize repositories
-                initializeRepositories(context)
+                // Step 2: Initialize repositories (must be first)
+                if (!executeStep(1) { initializeRepositories(context) }) return@launch
                 
-                // Step 3: Initialize MediaController (before message handling service)
-                initializeMediaController(context)
-            
+                // Step 3: Initialize MediaController (async - we'll wait for completion)
+                if (!executeStep(2) { initializeMediaControllerAsync(context) }) return@launch
                 
-                // Step 5: Update screen dimensions in repository
-                updateScreenDimensionsInRepository()
+                // Step 4: Update screen dimensions in repository (depends on repos + screen calc)
+                if (!executeStep(3) { updateScreenDimensionsInRepository() }) return@launch
                 
-                // Step 6: Initialize overlay service (after MediaController is ready)
-                initializeOverlayService(context)
-                    
-                // Step 4: Initialize MQTT service
-                initializeMqttService(context)
-                // Step 7: Start monitoring MQTT enable/disable changes
-                startMqttMonitoring()
+                // Step 5: Initialize overlay service (depends on screen + media controller)
+                if (!executeStep(4) { initializeOverlayServiceAsync(context) }) return@launch
                 
-                _isInitialized.value = true
-                _initializationError.value = null
-                Log.d(TAG, "Initialization complete")
+                // Step 6: Initialize MQTT service (depends on repos + message handling)
+                if (!executeStep(5) { initializeMqttServiceAsync(context) }) return@launch
+                
+                // Step 7: Start MQTT monitoring
+                if (!executeStep(6) { startMqttMonitoring() }) return@launch
+                
+                // Step 8: Broadcast all current states
+                if (!executeStep(7) { broadcastCurrentStates() }) return@launch
+                
+                // Step 9: Mark as complete
+                executeStep(8) { 
+                    _isInitialized.value = true
+                    _initializationError.value = null
+                    Log.d(TAG, "Initialization complete - all systems ready")
+                }
                 
             } catch (e: Exception) {
                 Log.e(TAG, "Initialization failed", e)
                 _initializationError.value = e.message
                 _isInitialized.value = false
+                updateProgress(-1f) // Error state
             }
         }
+    }
+    
+    private suspend fun executeStep(stepIndex: Int, action: suspend () -> Unit): Boolean {
+        return try {
+            val step = initializationSteps[stepIndex]
+            _currentStep.value = step.description
+            Log.d(TAG, "Executing step ${stepIndex + 1}/${initializationSteps.size}: ${step.description}")
+            
+            action()
+            
+            step.completed = true
+            updateProgress((stepIndex + 1).toFloat() / initializationSteps.size)
+            Log.d(TAG, "Step completed: ${step.description}")
+            true
+        } catch (e: Exception) {
+            val step = initializationSteps[stepIndex]
+            step.error = e.message
+            Log.e(TAG, "Step failed: ${step.description}", e)
+            _initializationError.value = "Failed at step: ${step.description} - ${e.message}"
+            false
+        }
+    }
+    
+    private fun updateProgress(progress: Float) {
+        _initializationProgress.value = progress
     }
     
     private fun calculateScreenDimensions(context: Context) {
@@ -153,6 +228,7 @@ class ServiceOrchestrator private constructor(context: Context) {
         screenDensity = realMetrics.density
 
         Log.d(TAG, "Screen dimensions: ${screenWidthPx}x${screenHeightPx}px, density: $screenDensity")
+        screenDimensionsReady = true
     }
     
     private suspend fun initializeRepositories(context: Context) {
@@ -165,9 +241,16 @@ class ServiceOrchestrator private constructor(context: Context) {
         mqttDiscoveryRepository = MqttDiscoveryRepository.getInstance(context)
         mqttPropertiesRepository = MqttPropertiesRepository.getInstance(context)
         
-        // Initialize YtDlpService
+        // Initialize YtDlpService with timeout
         ytDlpService = YtDlpService.getInstance(context)
-        ytDlpService?.initialize() // Explicitly start initialization
+        ytDlpService?.initialize()
+        
+        // Wait for YtDlp to be ready (with timeout)
+        withTimeout(10000) { // 10 second timeout
+            while (ytDlpService?.isInitialized != true) {
+                delay(100)
+            }
+        }
         
         // Initialize message handling service
         messageHandlingService = MessageHandlingService.getInstance(context)
@@ -180,40 +263,46 @@ class ServiceOrchestrator private constructor(context: Context) {
             registerHandler(NotificationCommandHandler(context))
             registerHandler(NotificationPropertiesCommandHandler(context))
             registerHandler(SystemCommandHandler(context))
-            registerHandler(mediaControlCommandHandler!!) // Use the stored reference
+            registerHandler(mediaControlCommandHandler!!)
             registerHandler(MqttPublishCommandHandler(context))
-            registerHandler(MediaStateUpdateHandler(context)) // Add the new handler
+            registerHandler(MediaStateUpdateHandler(context))
         }
         
         // Initialize Home Assistant discovery
         homeAssistantDiscovery = HomeAssistantDiscovery(context)
         
-        Log.d(TAG, "Repositories initialized")
+        repositoriesReady = true
+        Log.d(TAG, "Repositories initialized successfully")
     }
     
-    private fun initializeMediaController(context: Context) {
+    private suspend fun initializeMediaControllerAsync(context: Context) {
+        if (!repositoriesReady) {
+            throw IllegalStateException("Repositories must be initialized before MediaController")
+        }
+        
         Log.d(TAG, "Initializing MediaController")
         
-        customHybridMediaController?.release() // Release any existing instance
+        customHybridMediaController?.release()
+        
+        // Create MediaController with completion callback
+        var mediaControllerInitComplete = false
+        var mediaControllerError: String? = null
+        
         customHybridMediaController = HybridMediaController(context, object : MediaControllerCallback {
             override fun onInitialized(success: Boolean) {
+                mediaControllerInitComplete = true
                 if (success) {
                     Log.d(TAG, "MediaController initialized successfully")
                     _mediaControllerReady.value = true
+                    mediaControllerInitialized = true
                     
-                    // Provide controller to OverlayService
-                    OverlayService.setMediaController(customHybridMediaController)
-                    
-                    // Update MediaControlCommandHandler using stored reference
+                    // Update MediaControlCommandHandler
                     mediaControlCommandHandler?.updateMediaController(customHybridMediaController)
                     Log.d(TAG, "MediaControlCommandHandler updated with controller")
-                    
-                    // Load initial media if needed
-                    customHybridMediaController?.loadUrl("https://www.xvideos.com/video.ohvklvo3714/home-shemale/41544679/0/veronica_sanders_se_corre_en_mi_cara")
                 } else {
                     Log.e(TAG, "MediaController initialization failed")
                     _mediaControllerReady.value = false
-                    OverlayService.setMediaController(null)
+                    mediaControllerError = "MediaController initialization failed"
                 }
             }
 
@@ -223,22 +312,80 @@ class ServiceOrchestrator private constructor(context: Context) {
             
             override fun onError(error: String) {
                 Log.e(TAG, "MediaController error: $error")
+                mediaControllerError = error
             }
             
             override fun onMediaLoaded(mediaItem: MediaItem) {
                 Log.d(TAG, "MediaController media loaded: ${mediaItem.mediaId}")
             }
         })
+        
+        // Wait for MediaController initialization with timeout
+        withTimeout(15000) { // 15 second timeout
+            while (!mediaControllerInitComplete) {
+                delay(100)
+            }
+        }
+        
+        if (mediaControllerError != null) {
+            throw Exception("MediaController failed: $mediaControllerError")
+        }
+        
+        if (!mediaControllerInitialized) {
+            throw Exception("MediaController not ready after initialization")
+        }
     }
     
-    private fun initializeMqttService(context: Context) {
-        val mqttRepo = mqttPropertiesRepository ?: return
-        val msgHandler = messageHandlingService ?: return
+    private suspend fun updateScreenDimensionsInRepository() {
+        if (!repositoriesReady || !screenDimensionsReady) {
+            throw IllegalStateException("Repositories and screen dimensions must be ready")
+        }
+        
+        val repository = notificationPropertiesRepository ?: 
+            throw IllegalStateException("NotificationPropertiesRepository not initialized")
+        
+        val screenWidthInDp = screenWidthPx / screenDensity
+        val screenHeightInDp = screenHeightPx / screenDensity
+
+        Log.d(TAG, "Screen dimensions in DP: ${screenWidthInDp}x${screenHeightInDp}")
+        repository.updateScreenDimensions(screenWidthInDp, screenHeightInDp)
+    }
+    
+    private suspend fun initializeOverlayServiceAsync(context: Context) {
+        if (!mediaControllerInitialized || !screenDimensionsReady) {
+            throw IllegalStateException("MediaController and screen dimensions must be ready before overlay service")
+        }
+        
+        Log.d(TAG, "Starting overlay service")
+        
+        // Provide controller to OverlayService
+        OverlayService.setMediaController(customHybridMediaController)
+        
+        // Start overlay service
+        OverlayService.startService(context)
+        
+        // Wait a bit for service to start
+        delay(1000)
+        
+        overlayServiceReady = true
+        Log.d(TAG, "Overlay service initialized successfully")
+    }
+    
+    private suspend fun initializeMqttServiceAsync(context: Context) {
+        if (!repositoriesReady) {
+            throw IllegalStateException("Repositories must be initialized before MQTT service")
+        }
+        
+        val mqttRepo = mqttPropertiesRepository ?: 
+            throw IllegalStateException("MqttPropertiesRepository not initialized")
+        val msgHandler = messageHandlingService ?: 
+            throw IllegalStateException("MessageHandlingService not initialized")
         
         // Only initialize MQTT service if enabled in properties
         val currentProperties = mqttRepo.properties.value
         if (!currentProperties.enabled) {
             Log.d(TAG, "MQTT is disabled in properties - skipping initialization")
+            mqttServiceReady = true // Mark as ready (disabled)
             return
         }
         
@@ -247,10 +394,15 @@ class ServiceOrchestrator private constructor(context: Context) {
         
         // Initialize service
         mqttService?.initialize()
-
-        // Add MQTT connection callback to publish discovery
+        
+        var mqttConnected = false
+        var mqttConnectionError: String? = null
+        
+        // Add connection callbacks
         mqttService?.addOnConnectCallback {
             Log.d(TAG, "MQTT connected, publishing HA discovery")
+            mqttConnected = true
+            
             homeAssistantDiscovery?.apply {
                 initialize()
                 publishDiscovery()
@@ -258,38 +410,47 @@ class ServiceOrchestrator private constructor(context: Context) {
             }
         }
 
-        // Add MQTT disconnection callback to handle availability
         mqttService?.addOnDisconnectCallback {
             Log.d(TAG, "MQTT disconnected")
             homeAssistantDiscovery?.publishAvailability(false)
         }
         
-        // Register MQTT message listeners for different command types
+        // Register topic listeners
         mqttService?.apply {
-            // General command topics
             addTopicListener("yan/command/#") { topic, message ->
                 msgHandler.receiveMqttMessage(topic, message)
             }
-            
-            // Notification specific topics
             addTopicListener("yan/notification/#") { topic, message ->
                 msgHandler.receiveMqttMessage(topic, message)
             }
-            
-            // System control topics
             addTopicListener("yan/system/#") { topic, message ->
                 msgHandler.receiveMqttMessage(topic, message)
             }
-            
-            // Media control topics
             addTopicListener("yan/media/#") { topic, message ->
                 msgHandler.receiveMqttMessage(topic, message)
             }
-            
-
-            
-            Log.d(TAG, "MQTT command listeners registered")
         }
+        
+        // Connect and wait for connection (fix callback signature)
+        mqttService?.connect {
+            // Connection callback - no parameters
+            Log.d(TAG, "MQTT connect callback triggered")
+        }
+        
+        // Wait for connection with timeout
+        withTimeout(10000) { // 10 second timeout
+            while (!mqttConnected && mqttConnectionError == null) {
+                delay(100)
+            }
+        }
+        
+        if (mqttConnectionError != null) {
+            Log.w(TAG, "MQTT connection failed but continuing: $mqttConnectionError")
+            // Don't throw - allow initialization to continue without MQTT
+        }
+        
+        mqttServiceReady = true
+        Log.d(TAG, "MQTT service initialization completed")
     }
     
     private fun startMqttMonitoring() {
@@ -298,22 +459,19 @@ class ServiceOrchestrator private constructor(context: Context) {
         // Monitor MQTT enabled state changes
         orchestratorScope.launch {
             mqttRepo.properties.collectLatest { properties ->
+                if (!_isInitialized.value) return@collectLatest // Don't handle changes during initialization
+                
                 if (properties.enabled) {
                     Log.d(TAG, "MQTT enabled - initializing/connecting service")
                     
-                    // Initialize service if not already done
                     if (mqttService == null) {
-                        initializeMqttService(contextRef.get() ?: return@collectLatest)
-//                        val context = contextRef.get()
-//                        if (context != null) {
-//                            mqttService = MqttService.getInstance(context, mqttRepo)
-//                            mqttService?.initialize()
-//                        }
-                    }
-                    
-                    // Connect the service
-                    mqttService?.connect {
-                        Log.d(TAG, "MQTT service connected successfully")
+                        val context = contextRef.get() ?: return@collectLatest
+                        initializeMqttServiceAsync(context)
+                    } else {
+                        mqttService?.connect { 
+                            // Connection callback - no parameters
+                            Log.d(TAG, "MQTT reconnect callback triggered")
+                        }
                     }
                 } else {
                     Log.d(TAG, "MQTT disabled - disconnecting and destroying service")
@@ -325,36 +483,26 @@ class ServiceOrchestrator private constructor(context: Context) {
         }
     }
     
-    private suspend fun updateScreenDimensionsInRepository() {
-        val repository = notificationPropertiesRepository ?: return
+    private suspend fun broadcastCurrentStates() {
+        val msgHandler = messageHandlingService ?: 
+            throw IllegalStateException("MessageHandlingService not initialized")
         
-        val screenWidthInDp = screenWidthPx / screenDensity
-        val screenHeightInDp = screenHeightPx / screenDensity
-
-        Log.d(TAG, "Screen dimensions in DP: ${screenWidthInDp}x${screenHeightInDp}")
-
-        // Wait for initial load and check if update is needed
-        val currentProperties = repository.properties.value
-//        val tolerance = 1.0f
-//        val widthNeedsUpdate = kotlin.math.abs(currentProperties.screenWidthDp - screenWidthInDp) > tolerance
-//        val heightNeedsUpdate = kotlin.math.abs(currentProperties.screenHeightDp - screenHeightInDp) > tolerance
-
-
-            repository.updateScreenDimensions(screenWidthInDp, screenHeightInDp)
-
-    }
-    
-    private fun initializeOverlayService(context: Context) {
-        Log.d(TAG, "Starting overlay service")
+        Log.d(TAG, "Broadcasting current media and notification states")
         
-        // Wait for MediaController to be ready before starting overlay service
-        if (_mediaControllerReady.value) {
-            OverlayService.startService(context)
-        } else {
-            // If MediaController is not ready yet, start overlay service anyway
-            // The controller will be provided when it's ready
-            OverlayService.startService(context)
-            Log.d(TAG, "Overlay service started without MediaController (will be provided when ready)")
+        try {
+            // Broadcast all media updates
+            msgHandler.broadcastMediaUpdates()
+            
+            // Broadcast all notification status updates  
+            msgHandler.broadcastNotificationStatus()
+            
+            // Small delay to ensure broadcasts are processed
+            delay(500)
+            
+            Log.d(TAG, "State broadcasts completed")
+        } catch (e: Exception) {
+            Log.w(TAG, "Error broadcasting states: ${e.message}")
+            // Don't fail initialization for broadcast errors
         }
     }
     
@@ -374,20 +522,7 @@ class ServiceOrchestrator private constructor(context: Context) {
         OverlayService.appForegroundState.value = false
     }
     
-    
-    /**
-     * Get the current MediaController instance
-     */
-    fun getMediaController(): HybridMediaController? = customHybridMediaController
-    
-    /**
-     * Reinitialize MediaController
-     */
-    fun reinitializeMediaController() {
-        val context = contextRef.get() ?: return
-        Log.d(TAG, "Reinitializing MediaController")
-        initializeMediaController(context)
-    }
+
     
     /**
      * Clean shutdown of all services

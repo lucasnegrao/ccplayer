@@ -77,6 +77,7 @@ class HomeAssistantDiscovery(
     
     // Metadata for the components we want to expose
     private val componentDefinitions = mutableListOf<ComponentDefinition>()
+    private var mediaQueueSelectDefinition: SelectDefinition? = null // Track the queue select component
     
     /**
      * Initialize the discovery service
@@ -120,7 +121,7 @@ class HomeAssistantDiscovery(
                 name = "Media Title", 
                 uniqueIdSuffix = "media_title",
                 stateTopic = "$statusPrefix/media_item",
-                valueTemplate = "{{ value_json.metadata.title | default('No Title') }}",
+                valueTemplate = "{{ value_json.currentMediaItem.title | default('No Title') }}",
                 icon = "mdi:music-note",
                 category = "diagnostic"
             )
@@ -131,7 +132,7 @@ class HomeAssistantDiscovery(
                 name = "Media Artist", 
                 uniqueIdSuffix = "media_artist",
                 stateTopic = "$statusPrefix/media_item",
-                valueTemplate = "{{ value_json.metadata.artist | default('Unknown Artist') }}",
+                valueTemplate = "{{ value_json.currentMediaItem.artist | default('Unknown Artist') }}",
                 icon = "mdi:account-music",
                 category = "diagnostic"
             )
@@ -142,7 +143,7 @@ class HomeAssistantDiscovery(
                 name = "Media URI", 
                 uniqueIdSuffix = "media_uri",
                 stateTopic = "$statusPrefix/media_item",
-                valueTemplate = "{{ value_json.uri | default('No Media') }}",
+                valueTemplate = "{{ value_json.currentMediaItem.uri | default('No Media') }}",
                 icon = "mdi:link",
                 category = "diagnostic"
             )
@@ -153,7 +154,7 @@ class HomeAssistantDiscovery(
                 name = "Playback State", 
                 uniqueIdSuffix = "playback_state",
                 stateTopic = "$statusPrefix/media_state",
-                valueTemplate = "{{ value_json.state }}",
+                valueTemplate = "{{ value_json.playbackStateString }}",
                 icon = "mdi:play-circle-outline",
                 category = "diagnostic"
             )
@@ -164,7 +165,7 @@ class HomeAssistantDiscovery(
                 name = "Media Position", 
                 uniqueIdSuffix = "media_position",
                 stateTopic = "$statusPrefix/media_state",
-                valueTemplate = "{{ value_json.position | default(0) }}",
+                valueTemplate = "{{ value_json.currentPosition | default(0) }}",
                 icon = "mdi:clock-time-four-outline",
                 category = "diagnostic",
                 unitOfMeasurement = "ms"
@@ -273,6 +274,35 @@ class HomeAssistantDiscovery(
                 mode = "text"
             )
         )
+
+        // --- Media Queue Select ---
+        // NOTE: This component's full functionality depends on external implementations:
+        // 1. `MessageHandlingService` (or equivalent) should provide the actual list of queue item titles.
+        //    The `mediaQueueOptions` below uses placeholders.
+        // 2. `MessageHandlingService` must implement a command handler for "$commandPrefix/media_play_from_queue"
+        //    which accepts a payload like `{"title": "selected_item_title"}` and plays the corresponding item.
+        // 3. The MQTT topic "$statusPrefix/media_state" (or a dedicated queue status topic) needs to publish
+        //    a field (e.g., `active_queue_item_title`) that reflects the title of the currently playing queue item.
+        
+        // Placeholder for actual queue titles. Replace with dynamic data retrieval.
+        // Example: val mediaQueueOptions = messageHandler.getMediaQueueTitles() // Assuming such a method exists
+        val mediaQueueOptions = listOf("Placeholder Track 1", "Placeholder Track 2", "Placeholder Song A") 
+
+        if (mediaQueueOptions.isNotEmpty()) {
+            componentDefinitions.add(
+                SelectDefinition(
+                    name = "Play from Queue",
+                    uniqueIdSuffix = "media_queue_player",
+                    stateTopic = "$statusPrefix/media_queue", // Assumes this topic will contain active_queue_item_title
+                    commandTopic = "$commandPrefix/media_play_from_queue",
+                    valueTemplate = "{{ value_json.playlist.currentIndex | default('') }}", // Needs 'active_queue_item_title' in media_state JSON
+                    commandTemplate = "{\"title\": \"{{ value }}\"}", // 'value' will be the selected option string
+                    options = mediaQueueOptions,
+                    icon = "mdi:playlist-play"
+                    // category can be null (default) or "control" if appropriate for your HA setup
+                )
+            )
+        }
         
         // --- Notification Components ---
         
@@ -288,7 +318,7 @@ class HomeAssistantDiscovery(
                         uniqueIdSuffix = "notification_prop_$key",
                         stateTopic = "$statusPrefix/notification_properties",
                         commandTopic = "$commandPrefix/update_notification_properties",
-                        valueTemplate = "{{ value_json.$key }}",
+                        valueTemplate = "{{ value_json.playlist.currentIndex | default('') }}", // Needs 'active_queue_item_title' in media_state JSON
                         payloadOn = "{\"$key\": true}",
                         payloadOff = "{\"$key\": false}",
                         icon = "mdi:toggle-switch-outline", // Generic icon
@@ -712,6 +742,72 @@ class HomeAssistantDiscovery(
             mqttService.publish(availabilityTopic, HA_PAYLOAD_NOT_AVAILABLE, true)
         } catch (e: Exception) {
             Log.e(TAG, "Error publishing offline status", e)
+        }
+    }
+    
+    /**
+     * Update the media queue select component with new playlist options
+     */
+    fun updateMediaQueueComponent(playlistTitles: List<String>) {
+        // Remove existing queue component if it exists
+        mediaQueueSelectDefinition?.let { existing ->
+            componentDefinitions.removeAll { it is SelectDefinition && it.uniqueIdSuffix == existing.uniqueIdSuffix }
+        }
+        
+        // Only add the component if we have items in the playlist
+        if (playlistTitles.isNotEmpty()) {
+            val newDefinition = SelectDefinition(
+                name = "Play from Queue",
+                uniqueIdSuffix = "media_queue_player",
+                stateTopic = "$statusPrefix/media_queue",
+                commandTopic = "$commandPrefix/media_play_from_queue",
+                valueTemplate = "{{ value_json.playlist[value_json.currentIndex].title | default('') }}",
+                commandTemplate = "{\"title\": \"{{ value }}\" }",
+                options = playlistTitles,
+                icon = "mdi:playlist-play"
+            )
+            
+            mediaQueueSelectDefinition = newDefinition
+            componentDefinitions.add(newDefinition)
+            
+            Log.d(TAG, "Updated media queue component with ${playlistTitles.size} items")
+        } else {
+            mediaQueueSelectDefinition = null
+            Log.d(TAG, "Removed media queue component - empty playlist")
+        }
+    }
+    
+    /**
+     * Republish only the media queue select component
+     */
+    fun republishMediaQueueComponent() {
+        if (!mqttService.isConnected.value) {
+            Log.w(TAG, "MQTT service not connected. Skipping queue component republish.")
+            return
+        }
+        
+        mediaQueueSelectDefinition?.let { definition ->
+            val discoveryMessages = mutableListOf<Pair<String, String>>()
+            queueSelect(discoveryMessages, definition)
+            
+            // Publish immediately
+            discoveryMessages.forEach { (topic, payload) ->
+                try {
+                    mqttService.publish(topic, payload, true)
+                    Log.d(TAG, "Republished media queue component to $topic")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to republish media queue component to $topic: ${e.message}", e)
+                }
+            }
+        } ?: run {
+            // If no definition exists, we need to remove the component from HA
+            val removalTopic = "$HA_DISCOVERY_PREFIX/select/$baseUniqueId/media_queue_player/config"
+            try {
+                mqttService.publish(removalTopic, "", true) // Empty payload removes the entity
+                Log.d(TAG, "Removed media queue component from Home Assistant")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to remove media queue component: ${e.message}", e)
+            }
         }
     }
 }

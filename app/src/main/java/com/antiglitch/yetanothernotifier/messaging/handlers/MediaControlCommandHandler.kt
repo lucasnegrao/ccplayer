@@ -40,6 +40,7 @@ class MediaControlCommandHandler(
         private const val ADJUST_VOLUME = "media_adjust_volume"
         private const val LOAD_URL = "media_load_url"
         private const val ENQUEUE_URL = "media_enqueue_url"
+        private const val GET_QUEUE = "media_get_queue"
     }
     
     private val messageHandler by lazy {
@@ -52,7 +53,8 @@ class MediaControlCommandHandler(
         // Don't handle internal update commands - these are for broadcasting state changes
         if (command.action == "media_state_update" || 
             command.action == "media_metadata_update" || 
-            command.action == "media_item_update") {
+            command.action == "media_item_update" ||
+            command.action == "media_queue_update") {
             return false
         }
         return command.action.startsWith("media_")
@@ -96,6 +98,7 @@ class MediaControlCommandHandler(
             ADJUST_VOLUME -> handleAdjustVolume(command.payload)
             LOAD_URL -> handleLoadUrl(command.payload)
             ENQUEUE_URL -> handleEnqueueUrl(command.payload)
+            GET_QUEUE -> handleGetQueue()
             else -> CommandResult.Error("Unknown media action: ${command.action}")
         }
     }
@@ -421,6 +424,25 @@ class MediaControlCommandHandler(
     }
     
     /**
+     * Handle get queue command
+     */
+    private suspend fun handleGetQueue(): CommandResult = withContext(Dispatchers.Main) {
+        val controller = hybridMediaController?.mediaController ?:
+            return@withContext CommandResult.Error("No media controller available")
+        
+        return@withContext try {
+            val queueData = getQueueInfo(controller)
+            
+            // Also send as internal command for MQTT publishing
+            messageHandler.sendInternalCommand("media_queue_update", queueData)
+            
+            CommandResult.Success(queueData)
+        } catch (e: Exception) {
+            CommandResult.Error("Failed to get queue: ${e.message}", e)
+        }
+    }
+    
+    /**
      * Get media state information using Media3 Player
      */
     private fun getMediaStateInfo(controller: androidx.media3.session.MediaController): Map<String, Any?> {
@@ -450,6 +472,40 @@ class MediaControlCommandHandler(
         stateInfo["mediaItemCount"] = controller.mediaItemCount
         
         return stateInfo
+    }
+    
+    /**
+     * Get queue information from the media controller
+     */
+    private fun getQueueInfo(controller: androidx.media3.session.MediaController): Map<String, Any?> {
+        val queueItems = mutableListOf<Map<String, Any?>>()
+        
+        // Get all media items in the queue
+        for (i in 0 until controller.mediaItemCount) {
+            val mediaItem = controller.getMediaItemAt(i)
+            val serializedItem = serializeMediaItem(mediaItem).toMutableMap()
+            
+            // Add queue-specific information
+            serializedItem["queueIndex"] = i
+            serializedItem["isCurrentItem"] = (i == controller.currentMediaItemIndex)
+            
+            queueItems.add(serializedItem)
+        }
+        
+        return mapOf(
+            "queueSize" to controller.mediaItemCount,
+            "currentIndex" to controller.currentMediaItemIndex,
+            "hasNext" to controller.hasNextMediaItem(),
+            "hasPrevious" to controller.hasPreviousMediaItem(),
+            "shuffleModeEnabled" to controller.shuffleModeEnabled,
+            "repeatMode" to when (controller.repeatMode) {
+                Player.REPEAT_MODE_OFF -> "off"
+                Player.REPEAT_MODE_ONE -> "one"
+                Player.REPEAT_MODE_ALL -> "all"
+                else -> "unknown"
+            },
+            "items" to queueItems
+        )
     }
     
     /**
@@ -570,6 +626,10 @@ class MediaControlCommandHandler(
                 messageHandler.sendInternalCommand("media_item_update", serializedMediaItem)
                 messageHandler.broadcastUpdate("media_item", serializedMediaItem)
             }
+            
+            // Also send queue update when state changes
+            val queueInfo = getQueueInfo(controller)
+            messageHandler.sendInternalCommand("media_queue_update", queueInfo)
         }
     }
     

@@ -23,18 +23,21 @@ class MediaStateUpdateHandler(
         private const val TAG = "MediaStateUpdateHandler"
     }
     
-    override val actionPattern = "media_(state|item)_update"
+    override val actionPattern = "media_(state|item|queue)_update"
     
     private val handlerScope = CoroutineScope(Dispatchers.IO)
     
     override fun canHandle(command: Command): Boolean {
-        return command.action == "media_state_update" || command.action == "media_item_update"
+        return command.action == "media_state_update" || 
+               command.action == "media_item_update" ||
+               command.action == "media_queue_update"
     }
     
     override suspend fun handle(command: Command): CommandResult {
         return when (command.action) {
             "media_state_update" -> handleMediaStateUpdate(command.payload)
             "media_item_update" -> handleMediaItemUpdate(command.payload)
+            "media_queue_update" -> handleMediaQueueUpdate(command.payload)
             else -> CommandResult.Error("Unknown internal media command: ${command.action}")
         }
     }
@@ -70,6 +73,23 @@ class MediaStateUpdateHandler(
         } catch (e: Exception) {
             Log.e(TAG, "Error handling media item update", e)
             CommandResult.Error("Failed to publish media item: ${e.message}", e)
+        }
+    }
+    
+    /**
+     * Handle media queue update - publishes current queue items to MQTT
+     */
+    private suspend fun handleMediaQueueUpdate(payload: Map<String, Any?>): CommandResult {
+        return try {
+            Log.d(TAG, "Publishing media queue update to MQTT")
+            
+            // Publish to MQTT if available and enabled
+            publishToMqtt("yan/status/media_queue", payload)
+            
+            CommandResult.Success()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error handling media queue update", e)
+            CommandResult.Error("Failed to publish media queue: ${e.message}", e)
         }
     }
     

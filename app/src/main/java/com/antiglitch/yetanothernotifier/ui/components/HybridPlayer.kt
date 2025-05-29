@@ -74,21 +74,20 @@ fun HybridPlayerComposable(
     var currentMediaItem by remember { mutableStateOf<MediaItem?>(null) }
     var webView by remember { mutableStateOf<WebView?>(null) }
     var pendingWebViewLoad by remember { mutableStateOf<Pair<String, String>?>(null) }
-    var webViewKey by remember { mutableStateOf(0) } // Force recreation of AndroidView
+    var webViewKey by remember { mutableStateOf(0) }
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
     Log.d("HybridPlayer", "Composable recomposed - mediaController: $mediaController, viewState: $viewState")
 
-    // Create WebView factory
-    val createWebView = remember {
+    // Stabilize WebView factory with proper dependencies
+    val createWebView = remember(context, backgroundColor, videoTranslucency, keepScreenOn) {
         {
             Log.d("HybridPlayer", "Creating WebView instance")
             createWebViewInstance(
                 context = context,
                 onPageStarted = { 
                     Log.d("HybridPlayer", "WebView page started - current state: $viewState")
-                    // Only change to WEBVIEW_ACTIVE if we're expecting WebView content
                     if (viewState == HybridViewState.LOADING && 
                         (currentMediaItem?.mediaMetadata?.extras?.getString("content_type") != StreamType.VIDEO.name &&
                          currentMediaItem?.mediaMetadata?.extras?.getString("content_type") != StreamType.RTSP.name)) {
@@ -100,7 +99,6 @@ fun HybridPlayerComposable(
                 },
                 onPageFinished = { 
                     Log.d("HybridPlayer", "WebView page finished - current state: $viewState")
-                    // Only change state if we're in loading and expecting WebView content
                     if (viewState == HybridViewState.LOADING && 
                         (currentMediaItem?.mediaMetadata?.extras?.getString("content_type") != StreamType.VIDEO.name &&
                          currentMediaItem?.mediaMetadata?.extras?.getString("content_type") != StreamType.RTSP.name)) {
@@ -112,7 +110,6 @@ fun HybridPlayerComposable(
                 },
                 onError = { error ->
                     Log.e("HybridPlayer", "WebView error occurred: $error")
-                    // Only handle error if we're currently using WebView
                     if (viewState == HybridViewState.WEBVIEW_ACTIVE || viewState == HybridViewState.LOADING) {
                         Log.d("HybridPlayer", "Stopping MediaController due to WebView error")
                         mediaController?.stop()
@@ -124,6 +121,9 @@ fun HybridPlayerComposable(
         }
     }
 
+    // Stabilize current media item to prevent unnecessary reloads
+    val currentMediaItemStable = rememberUpdatedState(currentMediaItem)
+
     // Handle media controller changes and listeners
     LaunchedEffect(mediaController) {
         Log.d("HybridPlayer", "LaunchedEffect for mediaController: $mediaController")
@@ -132,26 +132,30 @@ fun HybridPlayerComposable(
             val listener = object : Player.Listener {
                 override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                     Log.d("HybridPlayer", "Media item transition: ${mediaItem?.mediaId}, reason: $reason")
-                    handleCurrentMediaItemDisplay(
-                        mediaItem = mediaItem,
-                        onStateChange = { newState -> 
-                            Log.d("HybridPlayer", "State change: $viewState -> $newState")
-                            // Force WebView recreation when switching to WEBVIEW_ACTIVE
-                            if (newState == HybridViewState.WEBVIEW_ACTIVE && viewState != HybridViewState.WEBVIEW_ACTIVE) {
-                                webViewKey++
-                                webView = null
+                    // Only process if media item actually changed
+                    if (currentMediaItemStable.value?.mediaId != mediaItem?.mediaId) {
+                        handleCurrentMediaItemDisplay(
+                            mediaItem = mediaItem,
+                            onStateChange = { newState -> 
+                                Log.d("HybridPlayer", "State change: $viewState -> $newState")
+                                // Only force WebView recreation for significant state changes
+                                if (newState == HybridViewState.WEBVIEW_ACTIVE && 
+                                    viewState == HybridViewState.PLAYER_ACTIVE) {
+                                    webViewKey++
+                                    webView = null
+                                }
+                                viewState = newState 
+                            },
+                            onMediaItemChange = { item -> 
+                                Log.d("HybridPlayer", "Media item changed: ${item?.mediaId}")
+                                currentMediaItem = item 
+                            },
+                            onWebViewLoad = { url, contentType ->
+                                Log.d("HybridPlayer", "WebView load requested: $url, type: $contentType")
+                                pendingWebViewLoad = Pair(url, contentType)
                             }
-                            viewState = newState 
-                        },
-                        onMediaItemChange = { item -> 
-                            Log.d("HybridPlayer", "Media item changed: ${item?.mediaId}")
-                            currentMediaItem = item 
-                        },
-                        onWebViewLoad = { url, contentType ->
-                            Log.d("HybridPlayer", "WebView load requested: $url, type: $contentType")
-                            pendingWebViewLoad = Pair(url, contentType)
-                        }
-                    )
+                        )
+                    }
                 }
 
                 override fun onPlayerError(error: PlaybackException) {
@@ -207,13 +211,13 @@ fun HybridPlayerComposable(
             
             // Trigger initial display if there's already a current media item
             val initialMediaItem = controller.currentMediaItem
-            if (initialMediaItem != null) {
+            if (initialMediaItem != null && currentMediaItem?.mediaId != initialMediaItem.mediaId) {
                 Log.d("HybridPlayer", "Controller has initial media item: ${initialMediaItem.mediaId}")
                 handleCurrentMediaItemDisplay(
                     mediaItem = initialMediaItem,
                     onStateChange = { newState -> 
                         Log.d("HybridPlayer", "Initial state change: $viewState -> $newState")
-                        if (newState == HybridViewState.WEBVIEW_ACTIVE && viewState != HybridViewState.WEBVIEW_ACTIVE) {
+                        if (newState == HybridViewState.WEBVIEW_ACTIVE && viewState == HybridViewState.PLAYER_ACTIVE) {
                             webViewKey++
                             webView = null
                         }
@@ -229,7 +233,7 @@ fun HybridPlayerComposable(
                     }
                 )
             } else {
-                Log.d("HybridPlayer", "Controller has no initial media item")
+                Log.d("HybridPlayer", "Controller has no initial media item or same as current")
             }
         } ?: Log.w("HybridPlayer", "MediaController is null, no listener added")
     }
@@ -272,54 +276,39 @@ fun HybridPlayerComposable(
         }
     }
 
-    // More aggressive cleanup when switching away from WEBVIEW_ACTIVE
+    // Consolidate lifecycle management to reduce conflicts
     LaunchedEffect(viewState) {
         when (viewState) {
             HybridViewState.PLAYER_ACTIVE -> {
-                Log.d("HybridPlayer", "Aggressively cleaning up WebView for PLAYER_ACTIVE state")
+                Log.d("HybridPlayer", "Managing WebView for PLAYER_ACTIVE state")
                 webView?.let { wv ->
                     wv.stopLoading()
                     wv.loadUrl("about:blank")
-                    wv.onPause() // Pause WebView when not active
-                    wv.pauseTimers() // Pause timers
-                    wv.clearCache(true)
-                    wv.clearHistory()
+                    wv.onPause()
+                    wv.pauseTimers()
                 }
                 pendingWebViewLoad = null
             }
             HybridViewState.ERROR, HybridViewState.NONE -> {
-                Log.d("HybridPlayer", "Cleaning up WebView for ERROR/NONE state")
+                Log.d("HybridPlayer", "Cleaning up for ERROR/NONE state")
                 webView?.let { wv ->
                     wv.stopLoading()
                     wv.loadUrl("about:blank")
-                    wv.onPause() // Pause WebView when not active
-                    wv.pauseTimers() // Pause timers
-                    wv.clearCache(true)
+                    wv.onPause()
+                    wv.pauseTimers()
                 }
                 mediaController?.stop()
                 pendingWebViewLoad = null
             }
-            HybridViewState.LOADING -> {
-                // Clean up any existing views when entering loading state
-                webView?.let { wv ->
-                    Log.d("HybridPlayer", "Cleaning up WebView for LOADING state")
-                    wv.stopLoading()
-                    // If loading is for a new WebView content, it will be resumed in factory.
-                    // If loading is for player, WebView should be paused.
-                    val contentType = currentMediaItem?.mediaMetadata?.extras?.getString("content_type")
-                    if (contentType == StreamType.VIDEO.name || contentType == StreamType.RTSP.name) {
-                        wv.onPause()
-                        wv.pauseTimers()
-                    }
-                }
-            }
             HybridViewState.WEBVIEW_ACTIVE -> {
                 Log.d("HybridPlayer", "WebView is becoming active, ensuring it's resumed.")
-                // WebView is created/resumed in the AndroidView factory
                 webView?.let { wv ->
                     wv.onResume()
                     wv.resumeTimers()
                 }
+            }
+            else -> {
+                // No action needed for LOADING state to prevent conflicts
             }
         }
     }
@@ -336,7 +325,6 @@ fun HybridPlayerComposable(
             HybridViewState.PLAYER_ACTIVE -> {
                 Log.d("HybridPlayer", "Rendering PLAYER_ACTIVE state")
                 
-                // Only render ExoPlayer when actually needed
                 mediaController?.let { controller ->
                     Log.d("HybridPlayer", "Rendering ExoPlayerComposable with MediaController: $controller")
                     ExoPlayerComposable(
@@ -350,7 +338,6 @@ fun HybridPlayerComposable(
             HybridViewState.WEBVIEW_ACTIVE -> {
                 Log.d("HybridPlayer", "Rendering WEBVIEW_ACTIVE state")
                 
-                // Only render WebView if content type is actually for WebView
                 val contentType = currentMediaItem?.mediaMetadata?.extras?.getString("content_type")
                 if (contentType != StreamType.VIDEO.name && contentType != StreamType.RTSP.name) {
                     // Force recreation when webViewKey changes
@@ -368,8 +355,8 @@ fun HybridPlayerComposable(
                                 wv.alpha = videoTranslucency
                                 wv.keepScreenOn = keepScreenOn
                                 Log.d("HybridPlayer", "WebView created and configured, resuming.")
-                                wv.onResume() // Resume when factory creates it
-                                wv.resumeTimers() // Resume timers
+                                wv.onResume()
+                                wv.resumeTimers()
 
                                 // Load pending content immediately if available
                                 pendingWebViewLoad?.let { (url, streamType) ->
@@ -384,7 +371,6 @@ fun HybridPlayerComposable(
                             .clip(shape)
                     ) { view ->
                         Log.d("HybridPlayer", "AndroidView update callback called")
-                        // Don't reassign webView here since it's already set in factory
                     }
                 } else {
                     Log.w("HybridPlayer", "WEBVIEW_ACTIVE state but content type is $contentType, switching to PLAYER_ACTIVE")

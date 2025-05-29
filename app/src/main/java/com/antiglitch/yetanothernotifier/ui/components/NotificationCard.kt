@@ -12,6 +12,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.BlurEffect
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import com.antiglitch.yetanothernotifier.OverlayService
@@ -29,28 +32,20 @@ fun NotificationCard(
 
     val player by OverlayService.playerControllerState.collectAsState()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize() // Changed from .size() to .fillMaxSize()
-            .graphicsLayer(alpha = properties.transparency) // Apply transparency here
-            .background(
-                color = MaterialTheme.colorScheme.surface,
-                shape = if (properties.roundedCorners) {
-                    RoundedCornerShape(properties.cornerRadius)
-                } else {
-                    RectangleShape
-                }
-            )
-    ) {
-        val shape = if (properties.roundedCorners) {
-            RoundedCornerShape(properties.cornerRadius)
-        } else {
-            RectangleShape
-        }
-
-        HybridPlayerComposable(
-            player, // Use the player from the service
-            shape = shape
-        )
+    val shape = if (properties.roundedCorners) {
+        RoundedCornerShape(properties.cornerRadius)
+    } else {
+        RectangleShape
     }
+
+    // Remove Column wrapper and apply shape/transparency directly to HybridPlayer
+    HybridPlayerComposable(
+        mediaController = player,
+        shape = shape,
+        modifier = Modifier
+            .fillMaxSize()
+            .graphicsLayer(
+                alpha = properties.transparency
+            )
+    )
 }

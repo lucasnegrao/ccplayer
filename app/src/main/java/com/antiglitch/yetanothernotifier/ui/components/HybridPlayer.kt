@@ -314,125 +314,31 @@ fun HybridPlayerComposable(
     }
 
 
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .clip(shape)
-            .background(backgroundColor),
-        contentAlignment = Alignment.Center
-    ) {
-        when (viewState) {
-            HybridViewState.PLAYER_ACTIVE -> {
-                Log.d("HybridPlayer", "Rendering PLAYER_ACTIVE state")
-                
-                mediaController?.let { controller ->
-                    Log.d("HybridPlayer", "Rendering ExoPlayerComposable with MediaController: $controller")
-                    ExoPlayerComposable(
-                        player = controller,
-                        shape = shape,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } ?: Log.w("HybridPlayer", "MediaController is null in PLAYER_ACTIVE state")
+    // Centralized UI rendering
+    HybridPlayerContent(
+        viewState = viewState,
+        statusMessage = statusMessage,
+        currentMediaItem = currentMediaItem,
+        mediaController = mediaController,
+        webView = webView,
+        webViewKey = webViewKey,
+        pendingWebViewLoad = pendingWebViewLoad,
+        modifier = modifier,
+        backgroundColor = backgroundColor,
+        keepScreenOn = keepScreenOn,
+        videoTranslucency = videoTranslucency,
+        shape = shape,
+        onWebViewCreated = { newWebView -> webView = newWebView },
+        onWebViewLoadCleared = { pendingWebViewLoad = null },
+        onStateChange = { newState ->
+            if (newState == HybridViewState.WEBVIEW_ACTIVE && viewState == HybridViewState.PLAYER_ACTIVE) {
+                webViewKey++
+                webView = null
             }
-            
-            HybridViewState.WEBVIEW_ACTIVE -> {
-                Log.d("HybridPlayer", "Rendering WEBVIEW_ACTIVE state")
-                
-                val contentType = currentMediaItem?.mediaMetadata?.extras?.getString("content_type")
-                if (contentType != StreamType.VIDEO.name && contentType != StreamType.RTSP.name) {
-                    // Force recreation when webViewKey changes
-                    LaunchedEffect(webViewKey) {
-                        Log.d("HybridPlayer", "WebView recreation triggered by key change: $webViewKey")
-                        webView = null // Ensure old instance is cleared if key changes
-                    }
-                    
-                    AndroidView(
-                        factory = { context ->
-                            Log.d("HybridPlayer", "AndroidView factory called for WebView (key: $webViewKey)")
-                            createWebView().also { wv ->
-                                webView = wv
-                                wv.setBackgroundColor(backgroundColor.toArgb())
-                                wv.alpha = videoTranslucency
-                                wv.keepScreenOn = keepScreenOn
-                                Log.d("HybridPlayer", "WebView created and configured, resuming.")
-                                wv.onResume()
-                                wv.resumeTimers()
-
-                                // Load pending content immediately if available
-                                pendingWebViewLoad?.let { (url, streamType) ->
-                                    Log.d("HybridPlayer", "Loading pending content in new WebView: $url")
-                                    loadInWebView(wv, url, streamType)
-                                    pendingWebViewLoad = null
-                                }
-                            }
-                        },
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(shape)
-                    ) { view ->
-                        Log.d("HybridPlayer", "AndroidView update callback called")
-                    }
-                } else {
-                    Log.w("HybridPlayer", "WEBVIEW_ACTIVE state but content type is $contentType, switching to PLAYER_ACTIVE")
-                    LaunchedEffect(Unit) {
-                        viewState = HybridViewState.PLAYER_ACTIVE
-                    }
-                }
-            }
-            
-            HybridViewState.LOADING -> {
-                Log.d("HybridPlayer", "Rendering LOADING state")
-                CircularProgressIndicator(
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-            
-            HybridViewState.ERROR, HybridViewState.NONE -> {
-                Log.d("HybridPlayer", "Rendering ERROR/NONE state: $viewState")
-                // Don't render any views, just cleanup
-                LaunchedEffect(viewState) {
-                    Log.d("HybridPlayer", "Cleaning up resources for ERROR/NONE state")
-                    webView?.let { wv ->
-                        wv.loadUrl("about:blank")
-                        wv.clearCache(true)
-                    }
-                    pendingWebViewLoad = null
-                }
-                // Render nothing - empty space
-            }
-        }
-
-        // Status overlay - only render when visible
-        if (statusMessage.isVisible) {
-            Log.d("HybridPlayer", "Rendering status message: ${statusMessage.text}, isError: ${statusMessage.isError}")
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.8f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Box(
-                    modifier = Modifier
-                        .background(
-                            color = if (statusMessage.isError) 
-                                Color.Red.copy(alpha = 0.9f) 
-                            else 
-                                Color.Blue.copy(alpha = 0.9f),
-                            shape = MaterialTheme.shapes.medium
-                        )
-                        .clip(MaterialTheme.shapes.medium),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = statusMessage.text,
-                        color = Color.White,
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(16.dp)
-                    )
-                }
-            }
-        }
-    }
+            viewState = newState
+        },
+        createWebView = createWebView
+    )
 }
 
 private fun createWebViewInstance(

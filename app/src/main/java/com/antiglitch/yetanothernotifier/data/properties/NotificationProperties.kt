@@ -27,7 +27,7 @@ import kotlinx.serialization.serializer // For String.serializer()
 
 // PropertyRanges object is removed
 
-@Serializable(with = NotificationVisualPropertiesSerializer::class) // Updated to use custom serializer
+@Serializable(with = NotificationVisualPropertiesSerializer::class)
 data class NotificationVisualProperties(
     val model: NotificationModel = NotificationModel()
 ) {
@@ -40,23 +40,40 @@ data class NotificationVisualProperties(
     val roundedCorners: Boolean get() = model.getProperty("roundedCorners")!!.value as Boolean
     val margin: Dp get() = model.getProperty("margin")!!.value as Dp
     val transparency: Float get() = model.getProperty("transparency")!!.value as Float
-     val screenWidthDp: Float get() = model.getProperty("screenWidthDp")!!.value as Float
-     val screenHeightDp: Float get() = model.getProperty("screenHeightDp")!!.value as Float
+    val screenWidthDp: Float get() = model.getProperty("screenWidthDp")!!.value as Float
+    val screenHeightDp: Float get() = model.getProperty("screenHeightDp")!!.value as Float
 
     // Convenience map to access properties by key
     val propertiesMap: Map<String, Property<*>> get() = model.properties
 
-    // Computed properties using stored screen dimensions and model values (via delegated properties)
+    // Cache for calculated dimensions
+    @Transient
+    private var cachedDimensions: Pair<Dp, Dp>? = null
+    @Transient
+    private var lastCalculationKey: String? = null
+
+    // Computed properties using cached calculations
     val width: Dp
-        get() = getSize(screenWidthDp, screenHeightDp).first
+        get() = getCachedDimensions().first
 
     val height: Dp
-        get() = getSize(screenWidthDp, screenHeightDp).second
+        get() = getCachedDimensions().second
 
-    fun getSize(screenWidthDp: Float, screenHeightDp: Float): Pair<Dp, Dp> {
+    private fun getCachedDimensions(): Pair<Dp, Dp> {
+        val currentKey = "${screenWidthDp}_${screenHeightDp}_${scale}_${aspect.ratio}"
+        
+        if (cachedDimensions == null || lastCalculationKey != currentKey) {
+            cachedDimensions = calculateSize(screenWidthDp, screenHeightDp)
+            lastCalculationKey = currentKey
+            println("DEBUG: Dimensions recalculated - key: $currentKey, result: ${cachedDimensions}")
+        }
+        
+        return cachedDimensions!!
+    }
+
+    private fun calculateSize(screenWidthDp: Float, screenHeightDp: Float): Pair<Dp, Dp> {
         // Debug logging
-        // Uses this.scale and this.aspect, which now delegate to the model
-        println("DEBUG: getSize called with screenWidth=$screenWidthDp, screenHeight=$screenHeightDp, scale=$scale, aspect=${aspect.ratio}")
+        println("DEBUG: calculateSize called with screenWidth=$screenWidthDp, screenHeight=$screenHeightDp, scale=$scale, aspect=${aspect.ratio}")
 
         // Determine if this is a portrait aspect ratio (height > width)
         val isPortraitRatio = aspect.ratio < 1.0f
@@ -66,11 +83,11 @@ data class NotificationVisualProperties(
 
         if (isPortraitRatio) {
             // For portrait ratios, scale applies to height
-            val targetHeight = screenHeightDp * scale // Remove 0.9f multiplier
+            val targetHeight = screenHeightDp * scale
             val calculatedWidth = targetHeight * aspect.ratio
 
-            // Check if width fits (leave small margin for safety)
-            val maxWidth = screenWidthDp * 0.95f
+            // Check if width fits
+            val maxWidth = screenWidthDp
             if (calculatedWidth > maxWidth) {
                 finalWidth = maxWidth
                 finalHeight = finalWidth / aspect.ratio
@@ -80,11 +97,11 @@ data class NotificationVisualProperties(
             }
         } else {
             // For landscape ratios, scale applies to width
-            val targetWidth = screenWidthDp * scale // Remove 0.9f multiplier
+            val targetWidth = screenWidthDp * scale
             val calculatedHeight = targetWidth / aspect.ratio
 
-            // Check if height fits (leave small margin for safety)
-            val maxHeight = screenHeightDp * 0.95f
+            // Check if height fits
+            val maxHeight = screenHeightDp
             if (calculatedHeight > maxHeight) {
                 finalHeight = maxHeight
                 finalWidth = finalHeight * aspect.ratio
@@ -96,6 +113,12 @@ data class NotificationVisualProperties(
 
         println("DEBUG: Final dimensions: width=$finalWidth, height=$finalHeight")
         return finalWidth.dp to finalHeight.dp
+    }
+
+    // Keep the old function for backward compatibility if needed, but mark it as deprecated
+    @Deprecated("Use width and height properties instead", ReplaceWith("Pair(width, height)"))
+    fun getSize(screenWidthDp: Float, screenHeightDp: Float): Pair<Dp, Dp> {
+        return calculateSize(screenWidthDp, screenHeightDp)
     }
 
     companion object {
@@ -132,13 +155,6 @@ enum class Gravity(val displayName: String) {
     BOTTOM_CENTER("Bottom Center"),
     BOTTOM_END("Bottom Right");
 
-    companion object {
-        val gravityGrid = listOf(
-            listOf(TOP_START, TOP_CENTER, TOP_END),
-            listOf(CENTER_START, CENTER, CENTER_END),
-            listOf(BOTTOM_START, BOTTOM_CENTER, BOTTOM_END)
-        )
-    }
 }
 
 // Custom serializer for Dp - kept in case other parts of the system use it or if serialization is reintroduced

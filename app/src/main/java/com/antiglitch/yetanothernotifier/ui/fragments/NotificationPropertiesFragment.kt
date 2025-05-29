@@ -45,7 +45,8 @@ import com.antiglitch.yetanothernotifier.data.repository.NotificationVisualPrope
 fun NotificationPropertiesFragment(
     modifier: Modifier = Modifier,
     focusRequester: FocusRequester = remember { FocusRequester() },
-    onBackPressed: () -> Unit = {}
+    onBackPressed: () -> Unit = {},
+    onOpenDrawer: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val repository = NotificationVisualPropertiesRepository.getInstance(context)
@@ -88,7 +89,7 @@ fun NotificationPropertiesFragment(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Add a back button at the top
+        // Header with back button and title (remove menu button)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -98,7 +99,7 @@ fun NotificationPropertiesFragment(
         ) {
             IconButton(
                 onClick = {
-                    Log.d("MqttPropertiesFragment", "Back button clicked, calling onBackPressed")
+                    Log.d("NotificationPropertiesFragment", "Back button clicked, calling onBackPressed")
                     onBackPressed()
                 },
                 colors = ButtonDefaults.colors(
@@ -114,10 +115,9 @@ fun NotificationPropertiesFragment(
             }
 
             Text(
-                text = "Properties",
+                text = "Notification Properties",
                 style = MaterialTheme.typography.headlineMedium
             )
-
         }
 
         // Duration Control

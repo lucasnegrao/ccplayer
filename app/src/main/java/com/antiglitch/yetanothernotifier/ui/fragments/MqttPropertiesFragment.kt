@@ -63,7 +63,8 @@ import com.antiglitch.yetanothernotifier.services.MqttService
 fun MqttPropertiesFragment(
     modifier: Modifier = Modifier,
     focusRequester: FocusRequester = remember { FocusRequester() },
-    onBackPressed: () -> Unit = {}
+    onBackPressed: () -> Unit = {},
+    onOpenDrawer: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val repository = MqttPropertiesRepository.getInstance(context)
@@ -204,17 +205,16 @@ fun MqttPropertiesFragment(
     }
 
     Column(
-        modifier =
-            modifier
-                .background(
-                    color = MaterialTheme.colorScheme.surface,
-                    shape = RoundedCornerShape(16.dp)
-                )
-                .verticalScroll(scrollState)
-                .padding(16.dp),
+        modifier = modifier
+            .background(
+                color = MaterialTheme.colorScheme.surface,
+                shape = RoundedCornerShape(16.dp)
+            )
+            .verticalScroll(scrollState)
+            .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Header with back button and title
+        // Header with back button and title (remove menu button)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -224,16 +224,12 @@ fun MqttPropertiesFragment(
         ) {
             IconButton(
                 onClick = {
-                    Log.d(
-                        "MqttPropertiesFragment",
-                        "Back button clicked, calling onBackPressed"
-                    )
+                    Log.d("MqttPropertiesFragment", "Back button clicked, calling onBackPressed")
                     onBackPressed()
                 },
-                colors =
-                    ButtonDefaults.colors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
-                    )
+                colors = ButtonDefaults.colors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                )
             ) {
                 Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
             }

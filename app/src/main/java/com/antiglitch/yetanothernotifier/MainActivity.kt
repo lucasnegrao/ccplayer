@@ -184,9 +184,8 @@ fun NotificationPropertiesScreen() {
     val context = LocalContext.current
     val repository = NotificationVisualPropertiesRepository.getInstance(context)
     val notificationProperties by repository.properties.collectAsState()
-    val gravityValue =
-        notificationProperties.gravity // Renamed from 'gravity' to avoid conflict with android.view.Gravity
-    val marginDp = notificationProperties.margin // Renamed from 'margin'
+    val gravityValue = notificationProperties.gravity
+    val marginDp = notificationProperties.margin
 
     // State for navigation between settings screens
     var currentScreen by remember { mutableStateOf("main") }
@@ -194,11 +193,7 @@ fun NotificationPropertiesScreen() {
     Box(
         modifier = Modifier.fillMaxSize()
     ) {
-        // Start the service regardless; it will manage its own overlay visibility
-        // NotificationOverlayService.startService(LocalContext.current) // Removed from here
-
         // If the app is in the foreground, render the NotificationCard directly
-        // The service will not show its overlay if appForegroundState.value is true.
         val isAppInForeground by OverlayService.appForegroundState.collectAsState()
         if (isAppInForeground) {
             val cardAlignment = NotificationUtils.getAlignmentForGravity(gravityValue)
@@ -222,32 +217,19 @@ fun NotificationPropertiesScreen() {
             }
         }
 
-        // Use SettingsNavigation instead of direct fragment composition
+        // Use SettingsNavigation with gravity information for proper positioning
         SettingsNavigation(
             initialScreen = when (currentScreen) {
                 "notification" -> SettingsScreen.NOTIFICATION_PROPERTIES
                 "mqtt" -> SettingsScreen.MQTT_PROPERTIES
-                else -> SettingsScreen.MAIN
+                else -> SettingsScreen.NOTIFICATION_PROPERTIES // Default to notifications
             },
             onBackPressed = {
-                // When back is pressed from main settings, reset to main
+                // When back is pressed from settings, reset to main
                 currentScreen = ""
             },
-            modifier = Modifier
-                .then(
-                    when (NotificationUtils.getOppositeOrientation(gravityValue)) {
-                        NotificationUtils.Orientation.Horizontal -> Modifier
-                            .fillMaxHeight()
-                            .fillMaxWidth(0.4f)
-                            .align(NotificationUtils.getOppositeAlignment(gravityValue))
-
-                        NotificationUtils.Orientation.Vertical -> Modifier
-                            .fillMaxWidth()
-                            .fillMaxHeight(0.8f)
-                            .align(NotificationUtils.getOppositeAlignment(gravityValue))
-                    }
-                )
-                .padding(8.dp)
+            notificationGravity = gravityValue,
+            modifier = Modifier.fillMaxSize()
         )
     }
 }

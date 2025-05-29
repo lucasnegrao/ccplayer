@@ -23,7 +23,6 @@ import java.util.UUID
  */
 class HomeAssistantDiscovery(
     private val context: Context,
-    private val deviceId: String = UUID.randomUUID().toString(),
     private val commandPrefix: String = "yan/command",
     private val statusPrefix: String = "yan/status",
     private val availabilityTopic: String = "yan/availability"
@@ -50,10 +49,17 @@ class HomeAssistantDiscovery(
         const val EVENT_MEDIA_STOPPED = "MEDIA_STOPPED"
     }
     
+    private val mqttRepository: MqttPropertiesRepository by lazy {
+        MqttPropertiesRepository.getInstance(context)
+    }
+    
     private val mqttService: MqttService by lazy {
-        val repository =  MqttPropertiesRepository.getInstance(context)
-
-        MqttService.getInstance(context, repository)
+        MqttService.getInstance(context, mqttRepository)
+    }
+    
+    // Get device ID from MQTT properties instead of generating random UUID
+    private val deviceId: String by lazy {
+        mqttRepository.mqttProperties.value.clientId
     }
     
     private val messageHandler: MessageHandlingService by lazy {
@@ -247,9 +253,20 @@ class HomeAssistantDiscovery(
         // Load URL text input
         componentDefinitions.add(
             TextDefinition(
-                name = "Load Media URL",
-                uniqueIdSuffix = "load_url",
+                name = "Enqueue Media URL",
+                uniqueIdSuffix = "enqueue_url",
                 commandTopic = "$commandPrefix/media_load_url",
+                commandTemplate = "{\"url\": \"{{ value }}\"}",
+                icon = "mdi:web",
+                mode = "text"
+            )
+        )
+
+        componentDefinitions.add(
+            TextDefinition(
+                name = "Media URL",
+                uniqueIdSuffix = "load_url",
+                commandTopic = "$commandPrefix/media_enqueue_url",
                 commandTemplate = "{\"url\": \"{{ value }}\"}",
                 icon = "mdi:web",
                 mode = "text"

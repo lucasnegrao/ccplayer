@@ -57,11 +57,6 @@ class YtDlpService private constructor(
         val duration: Long?
     )
 
-    init {
-        // Initialization is now handled by ServiceOrchestrator
-        // Start initialization in background when explicitly requested
-        Log.d(TAG, "YtDlpService instance created, waiting for initialization request")
-    }
 
     /**
      * Initialize yt-dlp and cache extractors (called by ServiceOrchestrator)
@@ -82,14 +77,12 @@ class YtDlpService private constructor(
             try {
                 Log.d(TAG, "Initializing YoutubeDL...")
                 YoutubeDL.getInstance().init(context)
-                isInitialized = true
-                Log.d(TAG, "YoutubeDL initialized successfully")
+                  isInitialized = true
 
-                // Pre-cache extractors
-                serviceScope.launch {
-                    cacheExtractors()
-                }
+                getExtractors() // Pre-fetch extractors to cache them
+
                 
+                Log.d(TAG, "YoutubeDL initialized successfully")
                 // Notify callbacks
                 synchronized(initializationCallbacks) {
                     initializationCallbacks.forEach { it(true) }

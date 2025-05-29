@@ -209,7 +209,7 @@ class ServiceOrchestrator private constructor(context: Context) {
                     Log.d(TAG, "MediaControlCommandHandler updated with controller")
                     
                     // Load initial media if needed
-                    customHybridMediaController?.loadUrl("https://www.xvideos.com/video.kpmcidh5fe9/compilation_of_young_traps_pleasing_themselves_cum_and_fun")
+                    customHybridMediaController?.loadUrl("https://www.xvideos.com/video.ohvklvo3714/home-shemale/41544679/0/veronica_sanders_se_corre_en_mi_cara")
                 } else {
                     Log.e(TAG, "MediaController initialization failed")
                     _mediaControllerReady.value = false

@@ -39,6 +39,7 @@ class MediaControlCommandHandler(
         private const val SEEK_TO = "media_seek_to"
         private const val ADJUST_VOLUME = "media_adjust_volume"
         private const val LOAD_URL = "media_load_url"
+        private const val ENQUEUE_URL = "media_enqueue_url"
     }
     
     private val messageHandler by lazy {
@@ -94,6 +95,7 @@ class MediaControlCommandHandler(
             SEEK_TO -> handleSeekTo(command.payload)
             ADJUST_VOLUME -> handleAdjustVolume(command.payload)
             LOAD_URL -> handleLoadUrl(command.payload)
+            ENQUEUE_URL -> handleEnqueueUrl(command.payload)
             else -> CommandResult.Error("Unknown media action: ${command.action}")
         }
     }
@@ -385,6 +387,36 @@ class MediaControlCommandHandler(
             CommandResult.Success(mapOf("loadedUrl" to url))
         } catch (e: Exception) {
             CommandResult.Error("Failed to load URL: ${e.message}", e)
+        }
+    }
+    
+    /**
+     * Handle enqueue URL command
+     */
+    private suspend fun handleEnqueueUrl(payload: Map<String, Any?>): CommandResult = withContext(Dispatchers.Main) {
+        val controller = hybridMediaController ?:
+            return@withContext CommandResult.Error("No media controller available")
+        
+        val url = when (val urlValue = payload["url"]) {
+            is String -> urlValue.trim()
+            else -> return@withContext CommandResult.Error("Missing or invalid URL value")
+        }
+        
+        if (url.isEmpty()) {
+            return@withContext CommandResult.Error("URL cannot be empty")
+        }
+        
+        return@withContext try {
+            Log.d(TAG, "Enqueuing URL: $url")
+            controller.enqueueUrl(url)
+            
+            // Wait briefly for media to be added to queue
+            delay(500)
+            sendMediaStateUpdate()
+            
+            CommandResult.Success(mapOf("enqueuedUrl" to url))
+        } catch (e: Exception) {
+            CommandResult.Error("Failed to enqueue URL: ${e.message}", e)
         }
     }
     

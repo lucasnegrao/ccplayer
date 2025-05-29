@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.antiglitch.yetanothernotifier"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.antiglitch.yetanothernotifier"
@@ -36,6 +36,11 @@ android {
     }
     buildFeatures {
         compose = true
+    }
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
     }
 }
 

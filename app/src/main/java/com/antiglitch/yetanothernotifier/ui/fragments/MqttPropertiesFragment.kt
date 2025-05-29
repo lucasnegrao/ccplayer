@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -36,18 +37,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.tv.material3.Button
-import androidx.tv.material3.ButtonDefaults
-import androidx.tv.material3.ExperimentalTvMaterial3Api
-import androidx.tv.material3.Icon
-import androidx.tv.material3.IconButton
-import androidx.tv.material3.InputChip
-import androidx.tv.material3.LocalContentColor
-import androidx.tv.material3.MaterialTheme
-import androidx.tv.material3.Text
+import androidx.tv.material3.*
+
 import com.antiglitch.yetanothernotifier.utils.PermissionType
 import com.antiglitch.yetanothernotifier.utils.PermissionUtil
 import com.antiglitch.yetanothernotifier.services.DiscoveryState
@@ -105,11 +101,14 @@ fun MqttPropertiesFragment(
     @Composable
     fun TextInputDialog(
         title: String,
-        value: String,
+        value: String, // This 'value' param seems unused as tempTextInput is used directly. Consider removing or using it to initialize tempTextInput.
         onDismiss: () -> Unit,
         onConfirm: (String) -> Unit,
         keyboardType: KeyboardType = KeyboardType.Text
     ) {
+        val confirmButtonFocusRequester = remember { FocusRequester() }
+        val localFocusManager = LocalFocusManager.current
+
         AlertDialog(
             onDismissRequest = onDismiss,
             title = { Text(title) },
@@ -118,7 +117,8 @@ fun MqttPropertiesFragment(
                     onClick = {
                         onConfirm(tempTextInput)
                         onDismiss()
-                    }
+                    },
+                    modifier = Modifier.focusRequester(confirmButtonFocusRequester)
                 ) { Text("Confirm") }
             },
             dismissButton = { Button(onClick = onDismiss) { Text("Cancel") } },
@@ -128,8 +128,21 @@ fun MqttPropertiesFragment(
                     // as it will be controlled by a remote or other input device
                     TextField(
                         value = tempTextInput,
-                        onValueChange = { tempTextInput = it },
-                        keyboardOptions = KeyboardOptions(keyboardType = keyboardType)
+                        onValueChange = { newValue ->
+                            // Filter out unwanted characters
+                            tempTextInput = newValue.filter { it != '\n' && it != '\t' }
+                        },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = keyboardType,
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onDone = {
+                                localFocusManager.clearFocus() // Clear focus from TextField
+                                confirmButtonFocusRequester.requestFocus() // Request focus for the Confirm button
+                            }
+                        ),
+                        singleLine = true // Important for imeAction.Done to work as expected
                     )
                 }
             }

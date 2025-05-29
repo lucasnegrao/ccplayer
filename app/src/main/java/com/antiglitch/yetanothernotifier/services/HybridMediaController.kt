@@ -76,6 +76,77 @@ class HybridMediaController(
     }
 
     @OptIn(UnstableApi::class)
+    fun enqueueUrl(url: String) {
+        var mediaItem: MediaItem? = null
+        callback.onLoadRequest()
+        CoroutineScope(Dispatchers.Main).launch {
+            val streamInfo = StreamTypeDetector.detectStreamInfo(url, context)
+            val streamType = streamInfo.streamType
+            Log.d(LOG_TAG, "Detected stream type: $streamType for URL: $url")
+
+            val extras = Bundle().apply {
+                putString("content_type", streamType.name)
+            }
+
+            when (streamType) {
+                StreamType.VIDEO -> {
+                    val title = streamInfo.title ?: ""
+                    val thumbnail = streamInfo.thumbnail ?: ""
+                    val uploader = streamInfo.uploader ?: ""
+
+                    mediaItem = MediaItem.Builder()
+                        .setUri(streamInfo.resolvedUrl)
+                        .setMediaId(streamInfo.resolvedUrl!!)
+                        .setMediaMetadata(
+                            MediaMetadata.Builder()
+                                .setTitle(title)
+                                .setArtist(uploader)
+                                .setMediaType(MediaMetadata.MEDIA_TYPE_MOVIE)
+                                .setArtworkUri(thumbnail.toUri())
+                                .setExtras(extras)
+                                .build()
+                        )
+                        .setTag(StreamType.VIDEO)
+                        .build()
+                }
+
+                StreamType.RTSP -> {
+                    val mediaItemRTSP = MediaItem.fromUri(streamInfo.resolvedUrl!!)
+                    mediaItem = mediaItemRTSP.buildUpon()
+                        .setMediaMetadata(
+                            MediaMetadata.Builder()
+                                .setExtras(extras)
+                                .setTitle(streamInfo.title ?: "")
+                                .build()
+                        )
+                        .build()
+                }
+
+                StreamType.MJPEG, StreamType.UNKNOWN, StreamType.WEBPAGE -> {
+                    mediaItem = MediaItem.Builder()
+                        .setUri(streamInfo.resolvedUrl)
+                        .setMediaId(streamInfo.resolvedUrl!!)
+                        .setMediaMetadata(
+                            MediaMetadata.Builder()
+                                .setExtras(extras)
+                                .setTitle(streamInfo.title ?: "")
+                                .build()
+                        )
+                        .setTag(streamType)
+                        .build()
+                }
+            }
+
+            mediaItem?.let { item ->
+                mediaController?.apply {
+                    addMediaItem(item)
+                    callback.onMediaLoaded(item)
+                }
+            }
+        }
+    }
+
+    @OptIn(UnstableApi::class)
     override fun loadUrl(url: String) {
         var mediaItem: MediaItem? = null
         callback.onLoadRequest()

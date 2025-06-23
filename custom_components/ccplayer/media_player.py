@@ -1020,8 +1020,11 @@ class CCPlayerMediaPlayer(MediaPlayerEntity):
     async def async_browse_media(
         self, media_content_type: str | None = None, media_content_id: str | None = None
     ) -> BrowseMedia:
-        topic = f"yan/{self._device_id}/command/media_get_playlists"
-        await mqtt.async_publish(self.hass, topic, "", 1, False)
+   
+
+        if(self._playlists.count == 0):
+            topic = f"yan/{self._device_id}/command/media_get_playlists"
+            await mqtt.async_publish(self.hass, topic, "", 1, False)
 
         _LOGGER.debug("Browsing media: type=%s, id=%s, playlists=%s", media_content_type, media_content_id, self._playlists)
         print(f"DEBUG: Browsing media: type={media_content_type}, id={media_content_id}, playlists={self._playlists}")

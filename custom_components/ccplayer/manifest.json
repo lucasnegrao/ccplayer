@@ -9,7 +9,7 @@
   "requirements": ["mqtt"],
   "version": "1.0.0",
   "mqtt": [
-    "ccast/discovery/#"
+    "yan/discovery/#"
   ],
   "integration_type": "device",
   "issue_tracker": "https://github.com/lucasnegrao/ccplayer/issues",

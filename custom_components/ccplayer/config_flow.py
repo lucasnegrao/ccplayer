@@ -62,6 +62,7 @@ class CCPlayerConfigFlow(ConfigFlow, domain=DOMAIN):
         data = json.loads(payload_holder)
 
         self._mqtt_discovered_prefix = data.get("deviceUniqueID")
+        self._discovered_device_id = self._mqtt_discovered_prefix  # Save for later
 
         # Proceed to confirmation step
         return await self.async_step_confirm()
@@ -99,8 +100,9 @@ class CCPlayerConfigFlow(ConfigFlow, domain=DOMAIN):
             else:
                 # No matching HA device, but we have a prefix from MQTT
                 self._discovered_device_info = {
-                    "name": self._mqtt_discovered_prefix, # Suggest name based on prefix
-                    "linked_device_id": None, # No device to link yet
+                    "name": self._mqtt_discovered_prefix,  # Suggest name based on prefix
+                    "linked_device_id": None,
+                    "device_id": self._mqtt_discovered_prefix,  # Save device id for later
                 }
                 description_placeholders["device_name"] = self._mqtt_discovered_prefix
 
@@ -111,8 +113,6 @@ class CCPlayerConfigFlow(ConfigFlow, domain=DOMAIN):
             description_placeholders=description_placeholders if description_placeholders else None,
             # No data_schema needed for a simple confirmation, unless we want to add options here.
         )
-
-    # async_step_confirm is removed.
 
     async def async_step_user(self, user_input=None):
         """Handle the initial step."""
@@ -131,75 +131,71 @@ class CCPlayerConfigFlow(ConfigFlow, domain=DOMAIN):
         device_choices = {dev_id: info["name"] for dev_id, info in devices.items()}
 
         if user_input is not None:
-            selected_device_id = user_input["linked_device_id"]
-            selected_ident = devices[selected_device_id]["identifiers"]
-            entities = [
-                ent
-                for ent in entity_registry.entities.values()
-                if ent.device_id == selected_device_id
-            ]
-
-            # Extract the device fragment from the first entity_id
-            def get_device_fragment(entities):
-                for ent in entities:
-                    parts = ent.entity_id.split(".")
-                    if len(parts) == 2 and "_" in parts[1]:
-                        # e.g. sensor.ccast_player_ent_96950033_playback_state
-                        frag = "_".join(parts[1].split("_")[:4])
-                        if frag.startswith("ccast_player_ent_"):
-                            return frag
-                return None
-
-            dev_fragment = get_device_fragment(entities)
-            # Fallback: try from device name
-            if not dev_fragment:
+            # Determine device_id to use for entity lookup and topic
+            if hasattr(self, "_discovered_device_id") and self._discovered_device_id:
+                device_id = self._discovered_device_id
+            else:
+                # Try to extract from selected device name or identifiers
+                selected_device_id = user_input["linked_device_id"]
                 dev_name = devices[selected_device_id]["name"]
-                dev_fragment = dev_name.lower().replace(" ", "_") if dev_name else ""
+                # Try to extract YANClient-xxxxxxx from name or identifiers
+                import re
+                match = re.search(r"(YANClient-\d+)", dev_name)
+                if not match and devices[selected_device_id]["identifiers"]:
+                    ident = devices[selected_device_id]["identifiers"]
+                    if isinstance(ident, tuple):
+                        match = re.search(r"(YANClient-\d+)", ident[1])
+                device_id = match.group(1) if match else dev_name.replace(" ", "_").lower()
+
+            # Build entity fragment from device_id
+            entity_fragment = device_id.replace("-", "_").lower()  # e.g., yanclient_40074106
+            if not entity_fragment.startswith("yan_"):
+                entity_fragment = f"yan_{entity_fragment}"
 
             # Helper to find entity_id by domain and suffix
             def find_entity(domain: str, suffix: str) -> str | None:
-                for ent in entities:
+                for ent in entity_registry.entities.values():
                     if ent.domain == domain and ent.entity_id.endswith(suffix):
                         return ent.entity_id
                 return None
 
-            # Fill entity fields
+            # Fill entity fields using the entity_fragment
             default_entities = {
                 CONF_PLAYER_STATE_ENTITY: find_entity(
-                    "sensor", f"{dev_fragment}_playback_state"
+                    "sensor", f"{entity_fragment}_playback_state"
                 )
                 or "",
                 CONF_MEDIA_TITLE_ENTITY: find_entity(
-                    "sensor", f"{dev_fragment}_media_title"
+                    "sensor", f"{entity_fragment}_media_title"
                 )
                 or "",
                 CONF_MEDIA_IMAGE_ENTITY: find_entity(
-                    "image", f"{dev_fragment}_media_thumbnail"
+                    "image", f"{entity_fragment}_media_thumbnail"
                 )
                 or "",
                 CONF_MEDIA_POSITION_ENTITY: find_entity(
-                    "sensor", f"{dev_fragment}_media_position"
+                    "sensor", f"{entity_fragment}_media_position"
                 )
                 or "",
                 CONF_MEDIA_DURATION_ENTITY: find_entity(
-                    "sensor", f"{dev_fragment}_media_duration"
+                    "sensor", f"{entity_fragment}_media_duration"
                 )
                 or "",
-                CONF_MUTE_ENTITY: find_entity("switch", f"{dev_fragment}_mute")
-                or find_entity("switch", f"{dev_fragment}_mute_control")
+                CONF_MUTE_ENTITY: find_entity("switch", f"{entity_fragment}_mute")
+                or find_entity("switch", f"{entity_fragment}_mute_control")
                 or "",
-                CONF_VOLUME_ENTITY: find_entity("number", f"{dev_fragment}_volume")
+                CONF_VOLUME_ENTITY: find_entity("number", f"{entity_fragment}_volume")
                 or "",
             }
 
-            # Fill actions (hardcoded except for device fragment)
+            # Fill actions (hardcoded except for entity_fragment)
             actions = {
                 "play_action": [
                     {
                         "action": "button.press",
                         "data": {},
                         "metadata": {},
-                        "target": {"entity_id": f"button.{dev_fragment}_play"},
+                        "target": {"entity_id": f"button.{entity_fragment}_play"},
                     }
                 ],
                 "pause_action": [
@@ -207,7 +203,7 @@ class CCPlayerConfigFlow(ConfigFlow, domain=DOMAIN):
                         "action": "button.press",
                         "data": {},
                         "metadata": {},
-                        "target": {"entity_id": f"button.{dev_fragment}_pause"},
+                        "target": {"entity_id": f"button.{entity_fragment}_pause"},
                     }
                 ],
                 "stop_action": [
@@ -215,7 +211,7 @@ class CCPlayerConfigFlow(ConfigFlow, domain=DOMAIN):
                         "action": "button.press",
                         "data": {},
                         "metadata": {},
-                        "target": {"entity_id": f"button.{dev_fragment}_stop"},
+                        "target": {"entity_id": f"button.{entity_fragment}_stop"},
                     }
                 ],
                 "seek_action": [
@@ -223,7 +219,7 @@ class CCPlayerConfigFlow(ConfigFlow, domain=DOMAIN):
                         "action": "number.set_value",
                         "data": {"value": "{{seek_position}}"},
                         "metadata": {},
-                        "target": {"entity_id": f"number.{dev_fragment}_media_seek"},
+                        "target": {"entity_id": f"number.{entity_fragment}_media_seek"},
                     }
                 ],
                 "play_media_action": [
@@ -231,19 +227,20 @@ class CCPlayerConfigFlow(ConfigFlow, domain=DOMAIN):
                         "action": "text.set_value",
                         "data": {"value": "{{media_id}}"},
                         "metadata": {},
-                        "target": {"entity_id": f"text.{dev_fragment}_load_media_url"},
+                        "target": {"entity_id": f"text.{entity_fragment}_load_media_url"},
                     }
                 ],
             }
 
-            # Save device, identifiers, guessed entities, and actions as options
+            # Save device, identifiers, guessed entities, actions, and device_id as options/data
             options = {**default_entities, "actions": actions}
             return self.async_create_entry(
                 title=user_input["name"],
                 data={
                     "name": user_input["name"],
-                    "linked_device_id": selected_device_id,
-                    "linked_device_identifier": selected_ident,
+                    "linked_device_id": user_input["linked_device_id"],
+                    "linked_device_identifier": devices[user_input["linked_device_id"]]["identifiers"],
+                    "device_id": device_id,  # Pass device_id for use in media_player
                 },
                 options=options,
             )
@@ -282,6 +279,11 @@ class CCPlayerConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry):
+        """Get the options flow for this handler."""
+        return CCPlayerOptionsFlow(config_entry)
     @staticmethod
     @callback
     def async_get_options_flow(config_entry):

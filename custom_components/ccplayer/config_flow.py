@@ -161,6 +161,9 @@ class CCPlayerConfigFlow(ConfigFlow, domain=DOMAIN):
 
             # Fill entity fields using the entity_fragment
             default_entities = {
+                CONF_POWER_ENTITY: find_entity("switch", f"{entity_fragment}_power")
+                or find_entity("switch", f"{entity_fragment}_power_control")
+                or "",
                 CONF_PLAYER_STATE_ENTITY: find_entity(
                     "sensor", f"{entity_fragment}_playback_state"
                 )
@@ -220,6 +223,14 @@ class CCPlayerConfigFlow(ConfigFlow, domain=DOMAIN):
                         "data": {"value": "{{seek_position}}"},
                         "metadata": {},
                         "target": {"entity_id": f"number.{entity_fragment}_media_seek"},
+                    }
+                ],
+                "shuffle_set_action": [
+                    {
+                        "action": "switch.toggle",   # Corrected to switch.toggle        
+                        "data": {},
+                        "metadata": {},
+                        "target": {"entity_id": f"switch.{entity_fragment}_shuffle"},
                     }
                 ],
                 "play_media_action": [

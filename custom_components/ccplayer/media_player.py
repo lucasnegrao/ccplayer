@@ -14,7 +14,10 @@ from homeassistant.components.media_player import (
     MediaPlayerEntity,
     MediaPlayerEntityFeature,
     MediaPlayerState,
+    MediaClass,
+    MediaType,
 )
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     ATTR_ENTITY_ID,
@@ -243,13 +246,9 @@ class CCPlayerMediaPlayer(MediaPlayerEntity):
 
         @callback
         def handle_mqtt_message(msg):
-            _LOGGER.debug("Received MQTT message on %s: %s", playlists_topic, msg.payload)
-            print(f"DEBUG: Received MQTT message on {playlists_topic}: {msg.payload}")
             try:
                 payload = json.loads(msg.payload)
                 self._playlists = payload.get("playlists", [])
-                _LOGGER.debug("Parsed playlists: %s", self._playlists)
-                print(f"DEBUG: Parsed playlists: {self._playlists}")
                 self.async_write_ha_state()
             except Exception as ex:
                 _LOGGER.error("Failed to parse playlists MQTT payload: %s", ex)
@@ -270,13 +269,10 @@ class CCPlayerMediaPlayer(MediaPlayerEntity):
 
         @callback
         def handle_mediaqueue_message(msg):
-            _LOGGER.debug("Received MQTT message on %s: %s", mediaqueue_topic, msg.payload)
-            print(f"DEBUG: Received MQTT message on {mediaqueue_topic}: {msg.payload}")
+
             try:
                 payload = json.loads(msg.payload)
                 self._mediaqueue = payload.get("playlist", [])
-                _LOGGER.debug("Parsed mediaqueue playlist: %s", self._mediaqueue)
-                print(f"DEBUG: Parsed mediaqueue playlist: {self._mediaqueue}")
                 self.async_write_ha_state()
             except Exception as ex:
                 _LOGGER.error("Failed to parse mediaqueue MQTT payload: %s", ex)
@@ -866,7 +862,13 @@ class CCPlayerMediaPlayer(MediaPlayerEntity):
         # Handle source selection
         if media_id and media_id.startswith("source:"):
             source = media_id.split(":", 1)[1]
-            await self.async_select_source(source)
+            if source:
+                    topic = f"yan/{self._device_id}/command/media_play_from_queue"
+                    payload = json.dumps({"title": source})
+                    _LOGGER.debug("async_play_media: Publishing playlist load: topic=%s payload=%s", topic, payload)
+                    await mqtt.async_publish(self.hass, topic, payload, 1, False)
+            else:
+                _LOGGER.warning("async_play_media: Playlist with index %s not found", playlist_index)
             return
 
         # Handle Home Assistant media sources
@@ -895,7 +897,7 @@ class CCPlayerMediaPlayer(MediaPlayerEntity):
             topic = f"yan/{self._device_id}/command/media_load_url"
             payload = json.dumps({"url": media_id})
             _LOGGER.debug("async_play_media: Publishing media_load_url: topic=%s payload=%s", topic, payload)
-            mqtt.async_publish(self.hass, topic, payload, 1, False)
+            await mqtt.async_publish(self.hass, topic, payload, 1, False)
             return
 
         _LOGGER.warning("async_play_media: No handler for media_id: %s", media_id)
@@ -1035,9 +1037,9 @@ class CCPlayerMediaPlayer(MediaPlayerEntity):
                 ),
                 BrowseMedia(
                     title="Sources",
-                    media_class="directory",
+                    media_class=MediaClass.DIRECTORY,
                     media_content_id="ccplayer_sources",
-                    media_content_type="directory",
+                    media_content_type=MediaType.VIDEO,
                     can_play=False,
                     can_expand=True,
                     children=[],
@@ -1074,20 +1076,45 @@ class CCPlayerMediaPlayer(MediaPlayerEntity):
                 title = item.get("title", f"Item {item.get('index', '')}")
                 media_id = item.get("mediaId")
                 thumbnail = item.get("thumbnail")
-                thumbimg = await self._async_fetch_image(thumbnail)
-                # Set both thumbnail and media_image_url for best compatibility
-                children.append(
-                    BrowseMedia(
-                        title=title,
-                        media_class="video",
-                        media_content_id=media_id,
-                        media_content_type="video",
-                        can_play=True,
-                        can_expand=False,
-                        thumbnail=thumbnail,
-                        children=[],
-                    )
+
+                print(
+                    f"DEBUG: Processing mediaqueue item: title={title}, media_id={media_id}, thumbnail={thumbnail}"
                 )
+
+                # Ensure thumbnail URL is properly formatted
+                if thumbnail and not thumbnail.startswith(("http://", "https://")):
+                    if thumbnail.startswith("/"):
+                        # Make relative URLs absolute
+                        base_url = (
+                            self.hass.config.external_url
+                            or self.hass.config.internal_url
+                            or "http://localhost:8123"
+                        )
+                        thumbnail = f"{base_url}{thumbnail}"
+                    else:
+                        # If it doesn't start with / or http, prepend http://
+                        thumbnail = f"http://{thumbnail}"
+
+                if thumbnail:
+                    print(f"DEBUG: Using thumbnail for {title}: {thumbnail}")
+
+                # Create BrowseMedia object with proper thumbnail
+                browse_item = BrowseMedia(
+                    title=title,
+                    media_class=MediaClass.IMAGE,
+                    media_content_id=f"source:{title}",
+                    media_content_type=MediaType.IMAGE,
+                    can_play=True,
+                    can_expand=False,
+                    thumbnail=thumbnail,
+                    children=[],
+                )
+
+                children.append(browse_item)
+
+            _LOGGER.debug("Created %d media items for ccplayer_sources", len(children))
+            print(f"DEBUG: Created {len(children)} media items for ccplayer_sources")
+
             return BrowseMedia(
                 title="Sources",
                 media_class="directory",
@@ -1127,49 +1154,49 @@ class CCPlayerMediaPlayer(MediaPlayerEntity):
                 children=children,
             )
 
-        # Handle selecting a playlist
-        if media_content_id and media_content_id.startswith("playlist:"):
-            playlist_index = media_content_id.split(":", 1)[1]
-            # Find playlist name by index
-            playlist_name = None
-            for playlist in self._playlists:
-                if str(playlist.get("index")) == str(playlist_index):
-                    playlist_name = playlist.get("name")
-                    break
-            if playlist_name:
-                topic = f"yan/{self._device_id}/command/media_load_playlist"
-                payload = json.dumps({"playlist selected": playlist_name})
-                _LOGGER.debug("Publishing playlist load: topic=%s payload=%s", topic, payload)
-                print(f"DEBUG: Publishing playlist load: topic={topic} payload={payload}")
-                # Use mqtt.async_publish directly, do not await (fire and forget)
-                mqtt.async_publish(self.hass, topic, payload, 1, False)
-            else:
-                _LOGGER.warning("Playlist with index %s not found", playlist_index)
-                print(f"DEBUG: Playlist with index {playlist_index} not found")
-            # Do NOT call async_play_media for playlists, just return the BrowseMedia object
-            return BrowseMedia(
-                title=f"Playlist {playlist_index}",
-                media_class="playlist",
-                media_content_id=media_content_id,
-                media_content_type="playlist",
-                can_play=True,
-                can_expand=False,
-                children=[],
-            )
+        # # Handle selecting a playlist
+        # if media_content_id and media_content_id.startswith("playlist:"):
+        #     playlist_index = media_content_id.split(":", 1)[1]
+        #     # Find playlist name by index
+        #     playlist_name = None
+        #     for playlist in self._playlists:
+        #         if str(playlist.get("index")) == str(playlist_index):
+        #             playlist_name = playlist.get("name")
+        #             break
+        #     if playlist_name:
+        #         topic = f"yan/{self._device_id}/command/media_load_playlist"
+        #         payload = json.dumps({"playlist selected": playlist_name})
+        #         _LOGGER.debug("Publishing playlist load: topic=%s payload=%s", topic, payload)
+        #         print(f"DEBUG: Publishing playlist load: topic={topic} payload={payload}")
+        #         # Use mqtt.async_publish directly, do not await (fire and forget)
+        #         await mqtt.async_publish(self.hass, topic, payload, 1, False)
+        #     else:
+        #         _LOGGER.warning("Playlist with index %s not found", playlist_index)
+        #         print(f"DEBUG: Playlist with index {playlist_index} not found")
+        #     # Do NOT call async_play_media for playlists, just return the BrowseMedia object
+        #     return BrowseMedia(
+        #         title=f"Playlist {playlist_index}",
+        #         media_class="playlist",
+        #         media_content_id=media_content_id,
+        #         media_content_type="playlist",
+        #         can_play=True,
+        #         can_expand=False,
+        #         children=[],
+        #     )
 
-        # Handle selecting a source
-        if media_content_id and media_content_id.startswith("source:"):
-            source = media_content_id.split(":", 1)[1]
-            await self.async_select_source(source)
-            return BrowseMedia(
-                title=f"Source {source}",
-                media_class="music",
-                media_content_id=media_content_id,
-                media_content_type="source",
-                can_play=True,
-                can_expand=False,
-                children=[],
-            )
+        # # Handle selecting a source
+        # if media_content_id and media_content_id.startswith("source:"):
+        #     source = media_content_id.split(":", 1)[1]
+        #     await self.async_select_source(source)
+        #     return BrowseMedia(
+        #         title=f"Source {source}",
+        #         media_class="music",
+        #         media_content_id=media_content_id,
+        #         media_content_type="source",
+        #         can_play=True,
+        #         can_expand=False,
+        #         children=[],
+        #     )
 
         # Otherwise, fallback to media_source (for subfolders etc)
         return await media_source.async_browse_media(self.hass, media_content_id)
